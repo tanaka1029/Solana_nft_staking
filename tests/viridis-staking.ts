@@ -59,7 +59,6 @@ describe("staking-program", () => {
   });
 
   it("should stake 1 token!", async () => {
-    // return;
     const userTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       payer.payer,
@@ -68,7 +67,8 @@ describe("staking-program", () => {
     );
 
     const amount = 1;
-    const amountDecimals = BigInt(amount * Math.pow(10, DECIMALS));
+    const periodDays = 30;
+    const amountDecimals = BigInt(amount * 10 ** DECIMALS);
     expect(userTokenAccount.amount, "User mint balance not zero").to.equal(0n);
 
     await mintTo(
@@ -101,7 +101,7 @@ describe("staking-program", () => {
     );
 
     const tx = await program.methods
-      .stake(new anchor.BN(amount))
+      .stake(new anchor.BN(amount), periodDays)
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
@@ -115,14 +115,20 @@ describe("staking-program", () => {
       payer.payer,
     ]);
 
-    const response = await connection.getTokenAccountBalance(
+    const balance = await connection.getTokenAccountBalance(
       stakeAccountAddress
     );
 
     expect(
-      response.value.uiAmount,
+      balance.value.uiAmount,
       "Updated user stake account shoudn't be empty"
     ).to.equal(amount);
+
+    const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
+
+    expect(stakeInfo.period, "Staking period does not match").to.equal(
+      periodDays
+    );
 
     console.log("Your transaction signature", signature);
   });
