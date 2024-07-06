@@ -3,7 +3,7 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{ Mint, Token, TokenAccount, Transfer, transfer },
 };
-use crate::{ constants::*, utils::get_apy, error::ErrorCode, state::StakeInfo };
+use crate::{ constants::*, utils::get_apy, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
 pub struct Stake<'info> {
@@ -17,7 +17,7 @@ pub struct Stake<'info> {
         payer = signer,
         space = 8 + std::mem::size_of::<StakeInfo>()
     )]
-    pub stake_info_account: Account<'info, StakeInfo>,
+    pub stake_info: Account<'info, StakeInfo>,
 
     #[account(
         init_if_needed,
@@ -39,24 +39,29 @@ pub struct Stake<'info> {
 }
 
 pub fn stake(ctx: Context<Stake>, amount: u64, stake_period: u8) -> Result<()> {
-    let stake_info = &mut ctx.accounts.stake_info_account;
-
-    require!(!stake_info.is_staked, ErrorCode::IsStaked);
     require!(amount > 0, ErrorCode::NoTokens);
     get_apy(stake_period)?;
 
-    stake_info.update_stake_info(Clock::get()?.unix_timestamp, stake_period);
+    let clock = Clock::get()?;
+    let current_time = clock.unix_timestamp as u64;
 
-    let stake_amount = amount
-        .checked_mul((10u64).pow(ctx.accounts.mint.decimals as u32))
-        .ok_or(ErrorCode::CalculationError)?;
+    let stake_entry = StakeEntry {
+        amount,
+        stake_period,
+        start_time: current_time,
+    };
 
-    transfer(
-        CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
-            from: ctx.accounts.user_token_account.to_account_info(),
-            to: ctx.accounts.stake_account.to_account_info(),
-            authority: ctx.accounts.signer.to_account_info(),
-        }),
-        stake_amount
-    )
+    ctx.accounts.stake_info.stakes.push(stake_entry);
+
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.user_token_account.to_account_info(),
+        to: ctx.accounts.stake_account.to_account_info(),
+        authority: ctx.accounts.signer.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+
+    transfer(cpi_ctx, amount)?;
+
+    Ok(())
 }

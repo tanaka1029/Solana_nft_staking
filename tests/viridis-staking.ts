@@ -10,6 +10,7 @@ import {
   getOrCreateAssociatedTokenAccount,
   getAccount,
   mintTo,
+  Account,
 } from "@solana/spl-token";
 import { ViridisStaking } from "../target/types/viridis_staking";
 import chai from "chai";
@@ -37,8 +38,27 @@ describe("staking-program", () => {
   const program = anchor.workspace
     .ViridisStaking as anchor.Program<ViridisStaking>;
 
+  const [stakeInfoAddress] = PublicKey.findProgramAddressSync(
+    [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
+    program.programId
+  );
+
+  const [stakeAccountAddress] = PublicKey.findProgramAddressSync(
+    [Buffer.from("token"), payer.publicKey.toBuffer()],
+    program.programId
+  );
+
+  let userTokenAccount: Account;
+
   before(async () => {
     await createSplToken(connection, payer, DECIMALS, mintKeypair);
+
+    userTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer.payer,
+      mintKeypair.publicKey,
+      payer.publicKey
+    );
   });
 
   it("should be initialized!", async () => {
@@ -59,16 +79,9 @@ describe("staking-program", () => {
   });
 
   it("should stake 1 token!", async () => {
-    const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      payer.payer,
-      mintKeypair.publicKey,
-      payer.publicKey
-    );
+    const userTokens = 150_000;
+    const userTokenDecimals = BigInt(userTokens * 10 ** DECIMALS);
 
-    const amount = 1;
-    const periodDays = 30;
-    const amountDecimals = BigInt(amount * 10 ** DECIMALS);
     expect(userTokenAccount.amount, "User mint balance not zero").to.equal(0n);
 
     await mintTo(
@@ -77,7 +90,7 @@ describe("staking-program", () => {
       mintKeypair.publicKey,
       userTokenAccount.address,
       payer.payer,
-      amountDecimals
+      userTokenDecimals
     );
 
     const updatedUserTokenAccount = await getAccount(
@@ -88,20 +101,12 @@ describe("staking-program", () => {
     expect(
       updatedUserTokenAccount.amount,
       "Updated user mint balance incorrect"
-    ).to.equal(amountDecimals);
+    ).to.equal(userTokenDecimals);
 
-    const [stakeInfoAddress] = PublicKey.findProgramAddressSync(
-      [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
-      program.programId
-    );
-
-    const [stakeAccountAddress] = PublicKey.findProgramAddressSync(
-      [Buffer.from("token"), payer.publicKey.toBuffer()],
-      program.programId
-    );
+    const periodDays = 30;
 
     const tx = await program.methods
-      .stake(new anchor.BN(amount), periodDays)
+      .stake(new anchor.BN(userTokenDecimals.toString()), periodDays)
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
@@ -122,12 +127,12 @@ describe("staking-program", () => {
     expect(
       balance.value.uiAmount,
       "Updated user stake account shoudn't be empty"
-    ).to.equal(amount);
+    ).to.equal(userTokens);
 
     const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
 
-    expect(stakeInfo.period, "Staking period does not match").to.equal(
-      periodDays
+    expect(stakeInfo.stakes.length, "User should have a single stake").to.equal(
+      1
     );
 
     console.log("Your transaction signature", signature);

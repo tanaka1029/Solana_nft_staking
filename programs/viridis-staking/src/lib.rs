@@ -22,7 +22,7 @@ pub mod viridis_staking {
         instructions::stake(ctx, amount, stake_period)
     }
 
-    pub fn destake(ctx: Context<Destake>) -> Result<()> {
-        instructions::destake(ctx)
-    }
+    // pub fn destake(ctx: Context<Destake>) -> Result<()> {
+    //     instructions::destake(ctx)
+    // }
 }
