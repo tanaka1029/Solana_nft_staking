@@ -15,7 +15,7 @@ import chaiAsPromised from "chai-as-promised";
 
 import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
-import { Account, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 chai.use(chaiAsPromised);
 const expect = chai.expect;
@@ -41,15 +41,23 @@ describe("viridis_staking", () => {
     payer.publicKey
   );
 
+  let tokenVaultAddress: PublicKey;
   let stakeInfoAddress: PublicKey;
   let stakeAccountAddress: PublicKey;
 
-  before(async () => {
+  before(async () => {});
+
+  beforeEach(async () => {
     context = await startAnchor("", [], []);
     provider = new BankrunProvider(context);
     program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
     await airdropSol(context, payer.publicKey, 1);
     await createSplToken(context.banksClient, payer, DECIMALS, mintKeypair);
+
+    tokenVaultAddress = PublicKey.findProgramAddressSync(
+      [Buffer.from("vault")],
+      program.programId
+    )[0];
 
     stakeInfoAddress = PublicKey.findProgramAddressSync(
       [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
@@ -60,9 +68,7 @@ describe("viridis_staking", () => {
       [Buffer.from("token"), payer.publicKey.toBuffer()],
       program.programId
     )[0];
-  });
 
-  beforeEach(async () => {
     const userTokens = 150_000;
     const userTokenDecimals = BigInt(userTokens * 10 ** DECIMALS);
 
@@ -72,15 +78,8 @@ describe("viridis_staking", () => {
       payer.publicKey,
       userTokenDecimals
     );
-  });
 
-  it("should be initialized!", async () => {
-    let [tokenVaultAddress] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vault")],
-      program.programId
-    );
-
-    const tx = await program.methods
+    await program.methods
       .initialize()
       .accounts({
         signer: payer.publicKey,
@@ -89,7 +88,6 @@ describe("viridis_staking", () => {
       })
       .signers([payer])
       .rpc();
-    console.log("Your transaction signature", tx);
   });
 
   it("should stake 1 token!", async () => {
@@ -132,5 +130,9 @@ describe("viridis_staking", () => {
     );
 
     console.log("Your transaction signature", signature);
+  });
+
+  it("test!", async () => {
+    // const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
   });
 });
