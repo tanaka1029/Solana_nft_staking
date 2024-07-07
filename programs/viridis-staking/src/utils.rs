@@ -17,3 +17,7 @@ pub fn calculate_reward(stake_amount: u64, apy: u64, days_passed: u64) -> Result
         .and_then(|v| v.checked_div(365))
         .ok_or(ErrorCode::CalculationError.into())
 }
+
+pub fn calculate_days_passed(start_time: u64, current_time: u64) -> u64 {
+    current_time.saturating_sub(start_time) / 86400 // 86400 seconds in a day
+}

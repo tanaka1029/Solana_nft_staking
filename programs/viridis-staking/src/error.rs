@@ -12,4 +12,10 @@ pub enum ErrorCode {
     StakePeriodNotMet,
     #[msg("Calculation error")]
     CalculationError,
+    #[msg("No stakes found")]
+    NoStakes,
+    #[msg("Invalid stake index")]
+    InvalidStakeIndex,
+    #[msg("Stake has already been destaked")]
+    AlreadyDestaked,
 }

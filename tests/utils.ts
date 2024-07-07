@@ -15,14 +15,15 @@ import {
 } from "@solana/web3.js";
 import { BanksClient, ProgramTestContext } from "solana-bankrun";
 
-export async function createSplToken(
+export async function createToken(
   banksClient: BanksClient,
   payer: Keypair,
   decimals: number,
   mintKeypair: Keypair
-) {
-  const rent = await banksClient.getRent();
-  const rentExemptBalance = rent.minimumBalance(BigInt(MINT_SIZE));
+): Promise<PublicKey> {
+  const rentExemptBalance = await banksClient
+    .getRent()
+    .then((rent) => rent.minimumBalance(BigInt(MINT_SIZE)));
 
   const transaction = new Transaction().add(
     SystemProgram.createAccount({
@@ -41,8 +42,8 @@ export async function createSplToken(
     )
   );
 
-  const blockhash = await banksClient.getLatestBlockhash();
-  transaction.recentBlockhash = blockhash[0];
+  const [recentBlockhash] = await banksClient.getLatestBlockhash();
+  transaction.recentBlockhash = recentBlockhash;
   transaction.feePayer = payer.publicKey;
   transaction.sign(payer, mintKeypair);
   await banksClient.processTransaction(transaction);
@@ -54,16 +55,14 @@ export async function airdropSol(
   context: ProgramTestContext,
   address: PublicKey,
   amount: number
-) {
+): Promise<number> {
   const lamports = amount * LAMPORTS_PER_SOL;
-
   const accountInfo = await context.banksClient.getAccount(address);
-
-  const newBalance =
-    BigInt(accountInfo ? accountInfo.lamports : 0) + BigInt(lamports);
+  const currentBalance = accountInfo ? accountInfo.lamports : 0;
+  const newBalance = currentBalance + lamports;
 
   context.setAccount(address, {
-    lamports: Number(newBalance),
+    lamports: newBalance,
     data: Buffer.alloc(0),
     owner: PublicKey.default,
     executable: false,
@@ -77,7 +76,7 @@ export async function setTokenAccount(
   mint: PublicKey,
   owner: PublicKey,
   amount: bigint
-) {
+): Promise<PublicKey> {
   const ata = getAssociatedTokenAddressSync(mint, owner, true);
 
   const tokenAccData = Buffer.alloc(ACCOUNT_SIZE);
@@ -118,6 +117,5 @@ export async function getTokenBalance(
     throw new Error("Token account not found");
   }
 
-  const accountInfo = AccountLayout.decode(account.data);
-  return accountInfo.amount;
+  return AccountLayout.decode(account.data).amount;
 }

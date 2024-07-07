@@ -18,11 +18,15 @@ pub mod viridis_staking {
         instructions::initialize(ctx)
     }
 
+    pub fn initialize_stake_info(ctx: Context<InitializeStakeInfo>) -> Result<()> {
+        instructions::initialize_stake_info(ctx)
+    }
+
     pub fn stake(ctx: Context<Stake>, amount: u64, stake_period: u8) -> Result<()> {
         instructions::stake(ctx, amount, stake_period)
     }
 
-    // pub fn destake(ctx: Context<Destake>) -> Result<()> {
-    //     instructions::destake(ctx)
-    // }
+    pub fn destake(ctx: Context<Destake>, stake_index: u8) -> Result<()> {
+        instructions::destake(ctx, stake_index)
+    }
 }

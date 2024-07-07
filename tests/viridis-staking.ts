@@ -1,30 +1,30 @@
-import * as anchor from "@coral-xyz/anchor";
 import { startAnchor, ProgramTestContext } from "solana-bankrun";
 import { BankrunProvider } from "anchor-bankrun";
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { BN, Idl, Program } from "@coral-xyz/anchor";
+import {
+  Keypair,
+  PublicKey,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
+import { BN, Program } from "@coral-xyz/anchor";
 import { getKeypair } from "../utils";
 import {
   airdropSol,
   setTokenAccount,
-  createSplToken,
+  createToken,
   getTokenBalance,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-
 import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 chai.use(chaiAsPromised);
-const expect = chai.expect;
+const { expect } = chai;
 
 describe("viridis_staking", () => {
-  let context: ProgramTestContext;
-  let provider: BankrunProvider;
-  let program: Program<ViridisStaking>;
-
+  const DECIMALS = 9;
   const payer = getKeypair(".private/id.json");
   const mintKeypair = Keypair.fromSecretKey(
     new Uint8Array([
@@ -34,40 +34,43 @@ describe("viridis_staking", () => {
       16, 200, 139, 34, 82, 69, 61, 141, 173, 111, 153, 170, 159, 45, 230,
     ])
   );
-  const DECIMALS = 9;
 
-  const userTokenAccount = getAssociatedTokenAddressSync(
-    mintKeypair.publicKey,
-    payer.publicKey
-  );
+  let context: ProgramTestContext;
+  let provider: BankrunProvider;
+  let program: Program<ViridisStaking>;
+  let accounts: {
+    userTokenAccount: PublicKey;
+    tokenVaultAddress: PublicKey;
+    stakeInfoAddress: PublicKey;
+    stakeAccountAddress: PublicKey;
+  };
 
-  let tokenVaultAddress: PublicKey;
-  let stakeInfoAddress: PublicKey;
-  let stakeAccountAddress: PublicKey;
-
-  before(async () => {});
-
-  beforeEach(async () => {
-    context = await startAnchor("", [], []);
-    provider = new BankrunProvider(context);
-    program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
-    await airdropSol(context, payer.publicKey, 1);
-    await createSplToken(context.banksClient, payer, DECIMALS, mintKeypair);
-
-    tokenVaultAddress = PublicKey.findProgramAddressSync(
+  const setupAccounts = (programId: PublicKey) => ({
+    userTokenAccount: getAssociatedTokenAddressSync(
+      mintKeypair.publicKey,
+      payer.publicKey
+    ),
+    tokenVaultAddress: PublicKey.findProgramAddressSync(
       [Buffer.from("vault")],
-      program.programId
-    )[0];
-
-    stakeInfoAddress = PublicKey.findProgramAddressSync(
+      programId
+    )[0],
+    stakeInfoAddress: PublicKey.findProgramAddressSync(
       [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
-      program.programId
-    )[0];
-
-    stakeAccountAddress = PublicKey.findProgramAddressSync(
+      programId
+    )[0],
+    stakeAccountAddress: PublicKey.findProgramAddressSync(
       [Buffer.from("token"), payer.publicKey.toBuffer()],
-      program.programId
-    )[0];
+      programId
+    )[0],
+  });
+
+  const setupEnvironment = async (
+    context: ProgramTestContext,
+    program: Program<ViridisStaking>,
+    accounts: ReturnType<typeof setupAccounts>
+  ) => {
+    await airdropSol(context, payer.publicKey, 1);
+    await createToken(context.banksClient, payer, DECIMALS, mintKeypair);
 
     const userTokens = 150_000;
     const userTokenDecimals = BigInt(userTokens * 10 ** DECIMALS);
@@ -84,55 +87,111 @@ describe("viridis_staking", () => {
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
-        tokenVaultAccount: tokenVaultAddress,
+        tokenVaultAccount: accounts.tokenVaultAddress,
       })
       .signers([payer])
       .rpc();
+  };
+
+  beforeEach(async () => {
+    context = await startAnchor("", [], []);
+    provider = new BankrunProvider(context);
+    program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
+
+    accounts = setupAccounts(program.programId);
+    await setupEnvironment(context, program, accounts);
   });
 
-  it("should stake 1 token!", async () => {
-    const periodDays = 30;
-    const amount = 150_000;
-    const amountDecimals = BigInt(amount * 10 ** DECIMALS);
-
-    const balance = await getTokenBalance(context, userTokenAccount);
-
-    console.log(balance);
-
-    const tx = await program.methods
-      .stake(new anchor.BN(amountDecimals.toString()), periodDays)
+  const getStakeTokenInstruction = (amountDecimals: BN, periodDays: number) => {
+    return program.methods
+      .stake(amountDecimals, periodDays)
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
-        stakeInfoAccount: stakeInfoAddress,
-        userTokenAccount: userTokenAccount,
-        stakeAccount: stakeAccountAddress,
+        stakeInfoAccount: accounts.stakeInfoAddress,
+        userTokenAccount: accounts.userTokenAccount,
+        stakeAccount: accounts.stakeAccountAddress,
       })
-      .signers([payer])
-      .transaction();
+      .instruction();
+  };
 
-    tx.recentBlockhash = context.lastBlockhash;
-    tx.feePayer = payer.publicKey;
-    tx.sign(payer);
+  it("should stake tokens successfully", async () => {
+    const stakes = [
+      { period: 30, amount: new BN(1_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(2_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(3_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(4_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(5_000 * 10 ** DECIMALS) },
+      { period: 30, amount: new BN(6_000 * 10 ** DECIMALS) },
+      { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
+    ];
 
-    const signature = await context.banksClient.processTransaction(tx);
-    const updatedBalance = await getTokenBalance(context, userTokenAccount);
-
-    expect(
-      updatedBalance,
-      "Updated user stake account shoudn't be empty"
-    ).to.equal(balance - amountDecimals);
-
-    const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
-
-    expect(stakeInfo.stakes.length, "User should have a single stake").to.equal(
-      1
+    const initialBalance = await getTokenBalance(
+      context,
+      accounts.userTokenAccount
+    );
+    const totalStakedAmount = stakes.reduce(
+      (sum, stake) => sum.add(stake.amount),
+      new BN(0)
     );
 
-    console.log("Your transaction signature", signature);
-  });
+    const instructions = [];
 
-  it("test!", async () => {
-    // const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
+    const initInstruction = await program.methods
+      .initializeStakeInfo()
+      .accounts({
+        signer: payer.publicKey,
+        stakeInfo: accounts.stakeInfoAddress,
+      })
+      .instruction();
+
+    instructions.push(initInstruction);
+
+    for (const stake of stakes) {
+      const stakeInstruction = await getStakeTokenInstruction(
+        stake.amount,
+        stake.period
+      );
+      instructions.push(stakeInstruction);
+    }
+
+    const messageV0 = new TransactionMessage({
+      payerKey: payer.publicKey,
+      recentBlockhash: context.lastBlockhash,
+      instructions,
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(messageV0);
+    tx.sign([payer]);
+
+    await context.banksClient.processTransaction(tx);
+
+    const stakeInfo = await program.account.stakeInfo.fetch(
+      accounts.stakeInfoAddress
+    );
+    const updatedBalance = await getTokenBalance(
+      context,
+      accounts.userTokenAccount
+    );
+
+    expect(updatedBalance).to.equal(
+      initialBalance - BigInt(totalStakedAmount.toString()),
+      "Updated user stake account should reflect the total staked amount"
+    );
+
+    console.log(stakes);
+
+    stakes.forEach((expectedStake, index) => {
+      const actualStake = stakeInfo.stakes[index];
+
+      expect(
+        expectedStake.amount.eq(actualStake.amount),
+        `Stake ${index} amount mismatch`
+      ).to.be.true;
+      expect(expectedStake.period).to.equal(
+        actualStake.period,
+        `Stake ${index} period mismatch`
+      );
+    });
   });
 });
