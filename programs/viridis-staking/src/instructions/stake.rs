@@ -1,26 +1,24 @@
 use anchor_lang::prelude::*;
-use anchor_lang::system_program;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{ Mint, Token, TokenAccount, Transfer, transfer },
-};
+use anchor_spl::{ associated_token::AssociatedToken, token::{ Mint, Token, TokenAccount } };
+use crate::utils::{ resize_account, transfer_tokens };
 use crate::{ constants::*, utils::get_apy, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
+#[instruction(amount: u64, stake_period: u8)]
 pub struct Stake<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(
         mut,
-        seeds = [STAKE_INFO_SEED, signer.key.as_ref()],
+        seeds = [STAKE_INFO_SEED, signer.key().as_ref()],
         bump,
     )]
     pub stake_info: Account<'info, StakeInfo>,
 
     #[account(
         init_if_needed,
-        seeds = [TOKEN_SEED, signer.key.as_ref()],
+        seeds = [TOKEN_SEED, signer.key().as_ref()],
         bump,
         payer = signer,
         token::mint = mint,
@@ -28,7 +26,11 @@ pub struct Stake<'info> {
     )]
     pub stake_account: Account<'info, TokenAccount>,
 
-    #[account(mut, associated_token::mint = mint, associated_token::authority = signer)]
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer
+    )]
     pub user_token_account: Account<'info, TokenAccount>,
 
     pub mint: Account<'info, Mint>,
@@ -42,55 +44,25 @@ pub fn stake(ctx: Context<Stake>, amount: u64, stake_period: u8) -> Result<()> {
     get_apy(stake_period)?;
 
     let stake_info = &mut ctx.accounts.stake_info;
+    let start_time = Clock::get()?.unix_timestamp as u64;
+    let new_stake = StakeEntry::new(amount, stake_period, start_time);
 
-    // Calculate new account size needed
-    let new_size = 8 + 4 + (stake_info.stakes.len() + 1) * StakeEntry::LEN;
+    resize_account(
+        stake_info,
+        &ctx.accounts.signer,
+        &ctx.accounts.system_program,
+        StakeEntry::len()
+    )?;
+    stake_info.stakes.push(new_stake);
 
-    // If reallocation is needed
-    if new_size > stake_info.to_account_info().data_len() {
-        // Calculate required rent for the new size
-        let rent = Rent::get()?;
-        let new_minimum_balance = rent.minimum_balance(new_size);
-        let lamports_diff = new_minimum_balance.saturating_sub(
-            stake_info.to_account_info().lamports()
-        );
-
-        if lamports_diff > 0 {
-            let cpi_context = CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                system_program::Transfer {
-                    from: ctx.accounts.signer.to_account_info(),
-                    to: stake_info.to_account_info(),
-                }
-            );
-            system_program::transfer(cpi_context, lamports_diff)?;
-        }
-
-        // Perform reallocation
-        stake_info.to_account_info().realloc(new_size, false)?;
-    }
-
-    let clock = Clock::get()?;
-    let current_time = clock.unix_timestamp as u64;
-
-    let stake_entry = StakeEntry {
+    transfer_tokens(
+        ctx.accounts.user_token_account.to_account_info(),
+        ctx.accounts.stake_account.to_account_info(),
+        ctx.accounts.signer.to_account_info(),
         amount,
-        period: stake_period,
-        start_time: current_time,
-        is_destaked: false,
-    };
-
-    ctx.accounts.stake_info.stakes.push(stake_entry);
-
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.user_token_account.to_account_info(),
-        to: ctx.accounts.stake_account.to_account_info(),
-        authority: ctx.accounts.signer.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-
-    transfer(cpi_ctx, amount)?;
+        ctx.accounts.token_program.to_account_info(),
+        None
+    )?;
 
     Ok(())
 }

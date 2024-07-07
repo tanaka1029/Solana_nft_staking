@@ -2,8 +2,6 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Tokens are not staked")]
-    NotStaked,
     #[msg("No tokens to stake")]
     NoTokens,
     #[msg("Invalid stake period")]
@@ -18,4 +16,8 @@ pub enum ErrorCode {
     InvalidStakeIndex,
     #[msg("Stake has already been destaked")]
     AlreadyDestaked,
+    #[msg("Arithmetic overflow")]
+    ArithmeticOverflow,
+    #[msg("Failed to reallocate account")]
+    ReallocError,
 }

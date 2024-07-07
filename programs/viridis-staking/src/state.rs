@@ -14,5 +14,16 @@ pub struct StakeEntry {
 }
 
 impl StakeEntry {
-    pub const LEN: usize = 8 + 1 + 8 + 1;
+    pub fn new(amount: u64, period: u8, start_time: u64) -> Self {
+        Self {
+            amount,
+            period,
+            start_time,
+            is_destaked: false,
+        }
+    }
+
+    pub fn len() -> usize {
+        std::mem::size_of::<Self>()
+    }
 }
