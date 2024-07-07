@@ -7,6 +7,8 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import {
+  AccountInfo,
+  Connection,
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
@@ -14,6 +16,7 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { BanksClient, ProgramTestContext } from "solana-bankrun";
+import { MAINNET_RPC } from "../const";
 
 export async function createToken(
   banksClient: BanksClient,
@@ -118,4 +121,30 @@ export async function getTokenBalance(
   }
 
   return AccountLayout.decode(account.data).amount;
+}
+
+export function fetchAccounts(addresses: PublicKey[]) {
+  const connection = new Connection(MAINNET_RPC);
+  return Promise.all(
+    addresses.map((address) => fetchAccount(address, connection))
+  );
+}
+
+async function fetchAccount(
+  address: PublicKey,
+  connection: Connection
+): Promise<{
+  address: PublicKey;
+  info: AccountInfo<Buffer>;
+}> {
+  const info = await connection.getAccountInfo(address);
+
+  if (info) {
+    return {
+      address,
+      info,
+    };
+  } else {
+    throw Error(`Cant find an account with address: ${address}`);
+  }
 }

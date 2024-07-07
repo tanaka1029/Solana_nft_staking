@@ -20,4 +20,10 @@ pub enum ErrorCode {
     ArithmeticOverflow,
     #[msg("Failed to reallocate account")]
     ReallocError,
+    #[msg("Nft already locked")]
+    NftAlreadyLocked,
+    #[msg("Invalid NFT collection")]
+    InvalidCollection,
+    #[msg("Invalid NFT metadata")]
+    InvalidMetadata,
 }

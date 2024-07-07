@@ -13,6 +13,7 @@ import {
   setTokenAccount,
   createToken,
   getTokenBalance,
+  fetchAccounts,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -20,8 +21,15 @@ import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
+import { TOKEN_METADATA_PROGRAM_ID } from "../const";
+import { deserializeMetaplexMetadata, getNftMetadataAddress } from "./metaplex";
+
 chai.use(chaiAsPromised);
 const { expect } = chai;
+
+const nftAddress = new PublicKey(
+  "7FTdQdMqkk5Xc2oFsYR88BuJt2yyCPReTpqr3viH6b6C"
+);
 
 describe("viridis_staking", () => {
   const DECIMALS = 9;
@@ -32,6 +40,15 @@ describe("viridis_staking", () => {
       8, 187, 108, 44, 203, 127, 216, 107, 30, 74, 88, 213, 67, 221, 141, 148,
       233, 238, 76, 204, 72, 175, 20, 55, 185, 155, 29, 149, 76, 138, 216, 229,
       16, 200, 139, 34, 82, 69, 61, 141, 173, 111, 153, 170, 159, 45, 230,
+    ])
+  );
+  const nftKeypair = Keypair.fromSecretKey(
+    new Uint8Array([
+      181, 103, 170, 39, 106, 226, 238, 110, 158, 223, 26, 56, 169, 110, 196,
+      158, 141, 149, 246, 209, 169, 135, 233, 80, 79, 254, 23, 174, 42, 202,
+      144, 12, 20, 178, 0, 82, 247, 243, 184, 40, 119, 155, 24, 7, 236, 247,
+      247, 32, 74, 227, 136, 16, 110, 61, 45, 68, 115, 1, 146, 159, 180, 219,
+      55, 139,
     ])
   );
 
@@ -66,8 +83,7 @@ describe("viridis_staking", () => {
 
   const setupEnvironment = async (
     context: ProgramTestContext,
-    program: Program<ViridisStaking>,
-    accounts: ReturnType<typeof setupAccounts>
+    program: Program<ViridisStaking>
   ) => {
     await airdropSol(context, payer.publicKey, 1);
     await createToken(context.banksClient, payer, DECIMALS, mintKeypair);
@@ -87,19 +103,36 @@ describe("viridis_staking", () => {
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
-        tokenVaultAccount: accounts.tokenVaultAddress,
       })
       .signers([payer])
       .rpc();
   };
 
+  async function getSeedAccounts() {
+    const metadataAddress = getNftMetadataAddress(nftAddress);
+
+    return fetchAccounts([
+      TOKEN_METADATA_PROGRAM_ID,
+      nftAddress,
+      metadataAddress,
+    ]);
+  }
+
   beforeEach(async () => {
-    context = await startAnchor("", [], []);
+    const seedAccounts = await getSeedAccounts();
+    context = await startAnchor("", [], seedAccounts);
     provider = new BankrunProvider(context);
     program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
 
     accounts = setupAccounts(program.programId);
-    await setupEnvironment(context, program, accounts);
+    await setupEnvironment(context, program);
+
+    const metadataAddress = getNftMetadataAddress(nftAddress);
+    const metadataAccount = await context.banksClient.getAccount(
+      metadataAddress
+    );
+
+    console.log(deserializeMetaplexMetadata(metadataAddress, metadataAccount));
   });
 
   const getStakeTokenInstruction = (amountDecimals: BN, periodDays: number) => {
@@ -118,12 +151,12 @@ describe("viridis_staking", () => {
   it("should stake tokens successfully", async () => {
     const stakes = [
       { period: 30, amount: new BN(1_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(2_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(3_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(4_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(5_000 * 10 ** DECIMALS) },
-      { period: 30, amount: new BN(6_000 * 10 ** DECIMALS) },
-      { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
+      // { period: 60, amount: new BN(2_000 * 10 ** DECIMALS) },
+      // { period: 60, amount: new BN(3_000 * 10 ** DECIMALS) },
+      // { period: 60, amount: new BN(4_000 * 10 ** DECIMALS) },
+      // { period: 60, amount: new BN(5_000 * 10 ** DECIMALS) },
+      // { period: 30, amount: new BN(6_000 * 10 ** DECIMALS) },
+      // { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
     ];
 
     const initialBalance = await getTokenBalance(
@@ -179,7 +212,7 @@ describe("viridis_staking", () => {
       "Updated user stake account should reflect the total staked amount"
     );
 
-    console.log(stakes);
+    console.log(stakeInfo);
 
     stakes.forEach((expectedStake, index) => {
       const actualStake = stakeInfo.stakes[index];

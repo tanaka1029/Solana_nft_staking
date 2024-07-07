@@ -1,6 +1,18 @@
 use anchor_lang::prelude::*;
 
 #[account]
+pub struct Config {
+    pub admin: Pubkey,
+    pub nft_collection: Pubkey,
+}
+
+impl Config {
+    pub fn len() -> usize {
+        8 + 32 + 32
+    }
+}
+
+#[account]
 pub struct StakeInfo {
     pub stakes: Vec<StakeEntry>,
 }
@@ -11,6 +23,7 @@ pub struct StakeEntry {
     pub period: u8,
     pub start_time: u64,
     pub is_destaked: bool,
+    pub nft_lock_time: Option<i64>,
 }
 
 impl StakeEntry {
@@ -20,10 +33,7 @@ impl StakeEntry {
             period,
             start_time,
             is_destaked: false,
+            nft_lock_time: None,
         }
-    }
-
-    pub fn len() -> usize {
-        std::mem::size_of::<Self>()
     }
 }
