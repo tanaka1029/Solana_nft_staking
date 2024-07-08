@@ -10,10 +10,11 @@ import { BN, Program } from "@coral-xyz/anchor";
 import { getKeypair } from "../utils";
 import {
   airdropSol,
-  setTokenAccount,
+  createTokenAccountAndCredit,
   createToken,
   getTokenBalance,
   fetchAccounts,
+  decodeAccount,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -71,6 +72,7 @@ describe("viridis_staking", () => {
     config: PublicKey;
     userStake: PublicKey;
     userToken: PublicKey;
+    userNft: PublicKey;
     tokenVault: PublicKey;
     stakeInfo: PublicKey;
     nft: PublicKey;
@@ -117,6 +119,7 @@ describe("viridis_staking", () => {
         mintKeypair.publicKey,
         payer.publicKey
       ),
+      userNft: getAssociatedTokenAddressSync(TEST_NFT_ADDRESS, payer.publicKey),
     };
   };
 
@@ -130,11 +133,20 @@ describe("viridis_staking", () => {
     const userTokens = 150_000;
     const userTokenDecimals = BigInt(userTokens * 10 ** DECIMALS);
 
-    await setTokenAccount(
+    // credir 150_000 tokens to user
+    await createTokenAccountAndCredit(
       context,
       mintKeypair.publicKey,
       payer.publicKey,
       userTokenDecimals
+    );
+
+    // credit 1 NFT to user
+    await createTokenAccountAndCredit(
+      context,
+      addresses.nft,
+      payer.publicKey,
+      1n
     );
 
     await program.methods
@@ -174,9 +186,6 @@ describe("viridis_staking", () => {
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
-        stakeInfoAccount: addresses.stakeInfo,
-        userTokenAccount: addresses.userToken,
-        stakeAccount: addresses.userStake,
       })
       .instruction();
   };
@@ -184,12 +193,12 @@ describe("viridis_staking", () => {
   it("should stake tokens successfully", async () => {
     const stakes = [
       { period: 30, amount: new BN(1_000 * 10 ** DECIMALS) },
-      // { period: 60, amount: new BN(2_000 * 10 ** DECIMALS) },
-      // { period: 60, amount: new BN(3_000 * 10 ** DECIMALS) },
-      // { period: 60, amount: new BN(4_000 * 10 ** DECIMALS) },
-      // { period: 60, amount: new BN(5_000 * 10 ** DECIMALS) },
-      // { period: 30, amount: new BN(6_000 * 10 ** DECIMALS) },
-      // { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(2_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(3_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(4_000 * 10 ** DECIMALS) },
+      { period: 60, amount: new BN(5_000 * 10 ** DECIMALS) },
+      { period: 30, amount: new BN(6_000 * 10 ** DECIMALS) },
+      { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
     ];
 
     const initialBalance = await getTokenBalance(context, addresses.userToken);
@@ -219,18 +228,10 @@ describe("viridis_staking", () => {
     }
 
     const lockInstruction = await program.methods
-      .lockNft(new BN(0))
+      .lockNft(new BN(5))
       .accounts({
         signer: payer.publicKey,
         mint: addresses.nft,
-        metadata: addresses.metadata,
-        nftCollection: addresses.nftCollection,
-        nftLockAccount: getNftLockAccount(
-          0,
-          payer.publicKey,
-          program.programId
-        ),
-        config: addresses.config,
       })
       .instruction();
 

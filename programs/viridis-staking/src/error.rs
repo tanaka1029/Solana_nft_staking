@@ -24,6 +24,4 @@ pub enum ErrorCode {
     NftAlreadyLocked,
     #[msg("Invalid NFT collection")]
     InvalidCollection,
-    #[msg("Invalid NFT metadata")]
-    InvalidMetadata,
 }

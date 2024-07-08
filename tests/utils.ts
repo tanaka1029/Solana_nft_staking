@@ -2,9 +2,12 @@ import {
   ACCOUNT_SIZE,
   AccountLayout,
   MINT_SIZE,
+  RawAccount,
+  MintLayout,
   TOKEN_PROGRAM_ID,
   createInitializeMint2Instruction,
   getAssociatedTokenAddressSync,
+  RawMint,
 } from "@solana/spl-token";
 import {
   AccountInfo,
@@ -74,13 +77,13 @@ export async function airdropSol(
   return newBalance;
 }
 
-export async function setTokenAccount(
+export async function createTokenAccountAndCredit(
   context: ProgramTestContext,
   mint: PublicKey,
   owner: PublicKey,
   amount: bigint
 ): Promise<PublicKey> {
-  const ata = getAssociatedTokenAddressSync(mint, owner, true);
+  const ata = getAssociatedTokenAddressSync(mint, owner);
 
   const tokenAccData = Buffer.alloc(ACCOUNT_SIZE);
   AccountLayout.encode(
@@ -110,17 +113,24 @@ export async function setTokenAccount(
   return ata;
 }
 
+export const decodeAccount = async <T extends "mint" | "account">(
+  context: ProgramTestContext,
+  address: PublicKey,
+  accountType: T
+): Promise<T extends "mint" ? RawMint : RawAccount> =>
+  (accountType === "mint" ? MintLayout : AccountLayout).decode(
+    (await context.banksClient.getAccount(address))?.data ??
+      (() => {
+        throw new Error("Account not found");
+      })()
+  ) as T extends "mint" ? RawMint : RawAccount;
+
 export async function getTokenBalance(
   context: ProgramTestContext,
   tokenAccount: PublicKey
 ): Promise<bigint> {
-  const account = await context.banksClient.getAccount(tokenAccount);
-
-  if (!account) {
-    throw new Error("Token account not found");
-  }
-
-  return AccountLayout.decode(account.data).amount;
+  const account = await decodeAccount(context, tokenAccount, "account");
+  return account.amount;
 }
 
 export function fetchAccounts(addresses: PublicKey[]) {
