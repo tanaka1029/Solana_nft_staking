@@ -14,7 +14,7 @@ pub struct Stake<'info> {
         seeds = [STAKE_INFO_SEED, signer.key().as_ref()],
         bump,
     )]
-    pub stake_info: Box<Account<'info, StakeInfo>>,
+    pub stake_info: Account<'info, StakeInfo>,
 
     #[account(
         init_if_needed,
@@ -24,16 +24,16 @@ pub struct Stake<'info> {
         token::mint = mint,
         token::authority = stake_account
     )]
-    pub stake_account: Box<Account<'info, TokenAccount>>,
+    pub stake_account: Account<'info, TokenAccount>,
 
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = signer
     )]
-    pub user_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_token_account: Account<'info, TokenAccount>,
 
-    pub mint: Box<Account<'info, Mint>>,
+    pub mint: Account<'info, Mint>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

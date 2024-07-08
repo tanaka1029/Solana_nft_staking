@@ -1,4 +1,3 @@
-pub const METADATA_SEED: &[u8] = b"metadata";
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const STAKE_INFO_SEED: &[u8] = b"stake_info";
@@ -10,3 +9,5 @@ pub const STAKING_DAYS_APY: [(u8, u64); 3] = [
     (60, 140),
     (90, 200),
 ];
+
+pub const METADATA_SEED: &[u8] = b"metadata";

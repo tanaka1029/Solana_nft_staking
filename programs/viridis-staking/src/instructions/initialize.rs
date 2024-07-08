@@ -23,6 +23,8 @@ pub struct Initialize<'info> {
     pub token_vault_account: Account<'info, TokenAccount>,
 
     pub mint: Account<'info, Mint>,
+    /// CHECK: NFT collection used to verify NFTs
+    pub nft_collection: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub token_metadata_program: Program<'info, Metadata>,
@@ -31,6 +33,7 @@ pub struct Initialize<'info> {
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     let config = &mut ctx.accounts.config;
     config.admin = ctx.accounts.signer.key();
+    config.nft_collection = ctx.accounts.nft_collection.key();
 
     Ok(())
 }

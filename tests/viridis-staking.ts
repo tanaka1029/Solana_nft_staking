@@ -21,15 +21,27 @@ import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
-import { TOKEN_METADATA_PROGRAM_ID } from "../const";
+import { TEST_NFT_ADDRESS, TOKEN_METADATA_PROGRAM_ID } from "../const";
 import { deserializeMetaplexMetadata, getNftMetadataAddress } from "./metaplex";
+import { Collection } from "@metaplex-foundation/mpl-token-metadata";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
 
-const nftAddress = new PublicKey(
-  "7FTdQdMqkk5Xc2oFsYR88BuJt2yyCPReTpqr3viH6b6C"
-);
+function getNftLockAccount(
+  stake_index: number,
+  payer: PublicKey,
+  programId: PublicKey
+) {
+  return PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("nft"),
+      payer.toBuffer(),
+      Buffer.from(new Uint8Array(new BN(stake_index).toArray("le", 8))),
+    ],
+    programId
+  )[0];
+}
 
 describe("viridis_staking", () => {
   const DECIMALS = 9;
@@ -42,7 +54,7 @@ describe("viridis_staking", () => {
       16, 200, 139, 34, 82, 69, 61, 141, 173, 111, 153, 170, 159, 45, 230,
     ])
   );
-  const nftKeypair = Keypair.fromSecretKey(
+  const anotherKeypair = Keypair.fromSecretKey(
     new Uint8Array([
       181, 103, 170, 39, 106, 226, 238, 110, 158, 223, 26, 56, 169, 110, 196,
       158, 141, 149, 246, 209, 169, 135, 233, 80, 79, 254, 23, 174, 42, 202,
@@ -55,31 +67,58 @@ describe("viridis_staking", () => {
   let context: ProgramTestContext;
   let provider: BankrunProvider;
   let program: Program<ViridisStaking>;
-  let accounts: {
-    userTokenAccount: PublicKey;
-    tokenVaultAddress: PublicKey;
-    stakeInfoAddress: PublicKey;
-    stakeAccountAddress: PublicKey;
+  let addresses: {
+    config: PublicKey;
+    userStake: PublicKey;
+    userToken: PublicKey;
+    tokenVault: PublicKey;
+    stakeInfo: PublicKey;
+    nft: PublicKey;
+    metadata: PublicKey;
+    nftCollection: PublicKey;
   };
 
-  const setupAccounts = (programId: PublicKey) => ({
-    userTokenAccount: getAssociatedTokenAddressSync(
-      mintKeypair.publicKey,
-      payer.publicKey
-    ),
-    tokenVaultAddress: PublicKey.findProgramAddressSync(
-      [Buffer.from("vault")],
-      programId
-    )[0],
-    stakeInfoAddress: PublicKey.findProgramAddressSync(
-      [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
-      programId
-    )[0],
-    stakeAccountAddress: PublicKey.findProgramAddressSync(
-      [Buffer.from("token"), payer.publicKey.toBuffer()],
-      programId
-    )[0],
-  });
+  const setupAddresses = async (programId: PublicKey) => {
+    const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
+    const metadataInfo = await context.banksClient.getAccount(metadataAddress);
+
+    const metadata = deserializeMetaplexMetadata(metadataAddress, metadataInfo);
+    let nftCollection: Collection;
+
+    if (metadata.collection.__option === "Some" && metadata.collection.value) {
+      nftCollection = metadata.collection.value;
+    } else {
+      throw new Error("NFT collection is missing or invalid");
+    }
+
+    const nftCollectionAddress = new PublicKey(nftCollection.key);
+
+    return {
+      config: PublicKey.findProgramAddressSync(
+        [Buffer.from("config")],
+        programId
+      )[0],
+      userStake: PublicKey.findProgramAddressSync(
+        [Buffer.from("token"), payer.publicKey.toBuffer()],
+        programId
+      )[0],
+      tokenVault: PublicKey.findProgramAddressSync(
+        [Buffer.from("vault")],
+        programId
+      )[0],
+      stakeInfo: PublicKey.findProgramAddressSync(
+        [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
+        programId
+      )[0],
+      nft: TEST_NFT_ADDRESS,
+      metadata: metadataAddress,
+      nftCollection: nftCollectionAddress,
+      userToken: getAssociatedTokenAddressSync(
+        mintKeypair.publicKey,
+        payer.publicKey
+      ),
+    };
+  };
 
   const setupEnvironment = async (
     context: ProgramTestContext,
@@ -103,17 +142,18 @@ describe("viridis_staking", () => {
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
+        nftCollection: addresses.nftCollection,
       })
       .signers([payer])
       .rpc();
   };
 
   async function getSeedAccounts() {
-    const metadataAddress = getNftMetadataAddress(nftAddress);
+    const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
 
     return fetchAccounts([
       TOKEN_METADATA_PROGRAM_ID,
-      nftAddress,
+      TEST_NFT_ADDRESS,
       metadataAddress,
     ]);
   }
@@ -124,15 +164,8 @@ describe("viridis_staking", () => {
     provider = new BankrunProvider(context);
     program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
 
-    accounts = setupAccounts(program.programId);
+    addresses = await setupAddresses(program.programId);
     await setupEnvironment(context, program);
-
-    const metadataAddress = getNftMetadataAddress(nftAddress);
-    const metadataAccount = await context.banksClient.getAccount(
-      metadataAddress
-    );
-
-    console.log(deserializeMetaplexMetadata(metadataAddress, metadataAccount));
   });
 
   const getStakeTokenInstruction = (amountDecimals: BN, periodDays: number) => {
@@ -141,9 +174,9 @@ describe("viridis_staking", () => {
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
-        stakeInfoAccount: accounts.stakeInfoAddress,
-        userTokenAccount: accounts.userTokenAccount,
-        stakeAccount: accounts.stakeAccountAddress,
+        stakeInfoAccount: addresses.stakeInfo,
+        userTokenAccount: addresses.userToken,
+        stakeAccount: addresses.userStake,
       })
       .instruction();
   };
@@ -159,10 +192,7 @@ describe("viridis_staking", () => {
       // { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
     ];
 
-    const initialBalance = await getTokenBalance(
-      context,
-      accounts.userTokenAccount
-    );
+    const initialBalance = await getTokenBalance(context, addresses.userToken);
     const totalStakedAmount = stakes.reduce(
       (sum, stake) => sum.add(stake.amount),
       new BN(0)
@@ -174,7 +204,7 @@ describe("viridis_staking", () => {
       .initializeStakeInfo()
       .accounts({
         signer: payer.publicKey,
-        stakeInfo: accounts.stakeInfoAddress,
+        stakeInfo: addresses.stakeInfo,
       })
       .instruction();
 
@@ -188,6 +218,24 @@ describe("viridis_staking", () => {
       instructions.push(stakeInstruction);
     }
 
+    const lockInstruction = await program.methods
+      .lockNft(new BN(0))
+      .accounts({
+        signer: payer.publicKey,
+        mint: addresses.nft,
+        metadata: addresses.metadata,
+        nftCollection: addresses.nftCollection,
+        nftLockAccount: getNftLockAccount(
+          0,
+          payer.publicKey,
+          program.programId
+        ),
+        config: addresses.config,
+      })
+      .instruction();
+
+    instructions.push(lockInstruction);
+
     const messageV0 = new TransactionMessage({
       payerKey: payer.publicKey,
       recentBlockhash: context.lastBlockhash,
@@ -200,12 +248,9 @@ describe("viridis_staking", () => {
     await context.banksClient.processTransaction(tx);
 
     const stakeInfo = await program.account.stakeInfo.fetch(
-      accounts.stakeInfoAddress
+      addresses.stakeInfo
     );
-    const updatedBalance = await getTokenBalance(
-      context,
-      accounts.userTokenAccount
-    );
+    const updatedBalance = await getTokenBalance(context, addresses.userToken);
 
     expect(updatedBalance).to.equal(
       initialBalance - BigInt(totalStakedAmount.toString()),
