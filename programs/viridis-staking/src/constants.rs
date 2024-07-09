@@ -4,10 +4,14 @@ pub const STAKE_INFO_SEED: &[u8] = b"stake_info";
 pub const TOKEN_SEED: &[u8] = b"token";
 pub const NFT_SEED: &[u8] = b"nft";
 
-pub const STAKING_DAYS_APY: [(u8, u64); 3] = [
-    (30, 110),
-    (60, 140),
-    (90, 200),
+pub const METADATA_SEED: &[u8] = b"metadata";
+
+pub const NFT_DAYS_APY: [(u16, u16); 3] = [
+    (30, 2950),
+    (60, 5950),
+    (90, 10450),
 ];
 
-pub const METADATA_SEED: &[u8] = b"metadata";
+pub const DEFAULT_STAKE_LOCK_DAYS: u16 = 14;
+pub const DEFAULT_BASE_APY: u16 = 550;
+pub const APY_DECIMALS: u16 = 8;

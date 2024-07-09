@@ -1,25 +1,25 @@
 use anchor_lang::{ prelude::*, system_program };
 use crate::error::ErrorCode;
-use crate::constants::STAKING_DAYS_APY;
+use crate::constants::NFT_DAYS_APY;
 use anchor_spl::token::{ transfer, Transfer };
 
-pub fn get_apy(stake_period: u8) -> Result<u64> {
-    STAKING_DAYS_APY.iter()
-        .find(|&&(days, _)| days == stake_period)
+pub fn get_apy(lock_days: u16) -> Result<u16> {
+    NFT_DAYS_APY.iter()
+        .find(|&&(days, _)| days == lock_days)
         .map(|&(_, apy)| apy)
         .ok_or_else(|| ErrorCode::InvalidStakePeriod.into())
 }
 
-pub fn calculate_reward(stake_amount: u64, apy: u64, days_passed: u64) -> Result<u64> {
+pub fn calculate_reward(stake_amount: u64, apy: u16, days_passed: u64) -> Result<u64> {
     stake_amount
-        .checked_mul(apy)
+        .checked_mul(apy as u64)
         .and_then(|v| v.checked_div(100))
         .and_then(|v| v.checked_mul(days_passed))
         .and_then(|v| v.checked_div(365))
         .ok_or(ErrorCode::CalculationError.into())
 }
 
-pub fn calculate_days_passed(start_time: u64, current_time: u64) -> u64 {
+pub fn calculate_days_passed(start_time: i64, current_time: i64) -> i64 {
     current_time.saturating_sub(start_time) / 86400 // 86400 seconds in a day
 }
 

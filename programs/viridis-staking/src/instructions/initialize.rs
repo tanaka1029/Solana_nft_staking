@@ -34,6 +34,8 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     let config = &mut ctx.accounts.config;
     config.admin = ctx.accounts.signer.key();
     config.nft_collection = ctx.accounts.nft_collection.key();
+    config.base_lock_days = DEFAULT_STAKE_LOCK_DAYS;
+    config.base_apy = DEFAULT_BASE_APY;
 
     Ok(())
 }

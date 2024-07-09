@@ -1,13 +1,20 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{ associated_token::AssociatedToken, token::{ Mint, Token, TokenAccount } };
 use crate::utils::{ resize_account, transfer_tokens };
-use crate::{ constants::*, utils::get_apy, error::ErrorCode, state::* };
+use crate::{ constants::*, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
-#[instruction(amount: u64, stake_period: u8)]
+#[instruction(amount: u64)]
 pub struct Stake<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [CONFIG_SEED],
+        bump,
+    )]
+    pub config: Account<'info, Config>,
 
     #[account(
         mut,
@@ -40,13 +47,13 @@ pub struct Stake<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn stake(ctx: Context<Stake>, amount: u64, stake_period: u8) -> Result<()> {
+pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
     require!(amount > 0, ErrorCode::NoTokens);
-    get_apy(stake_period)?;
 
     let stake_info = &mut ctx.accounts.stake_info;
-    let start_time = Clock::get()?.unix_timestamp as u64;
-    let new_stake = StakeEntry::new(amount, stake_period, start_time);
+    let config = &mut ctx.accounts.config;
+    let start_time = Clock::get()?.unix_timestamp;
+    let new_stake = StakeEntry::new(amount, start_time, config.base_lock_days, config.base_apy);
 
     resize_account(
         stake_info,

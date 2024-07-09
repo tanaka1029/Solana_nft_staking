@@ -18,16 +18,20 @@ pub mod viridis_staking {
         instructions::initialize(ctx)
     }
 
+    pub fn update_config(ctx: Context<UpdateConfig>, args: UpdateConfigArgs) -> Result<()> {
+        instructions::update_config(ctx, args)
+    }
+
     pub fn initialize_stake_info(ctx: Context<InitializeStakeInfo>) -> Result<()> {
         instructions::initialize_stake_info(ctx)
     }
 
-    pub fn stake(ctx: Context<Stake>, amount: u64, stake_period: u8) -> Result<()> {
-        instructions::stake(ctx, amount, stake_period)
+    pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
+        instructions::stake(ctx, amount)
     }
 
-    pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64) -> Result<()> {
-        instructions::lock_nft(ctx, stake_index)
+    pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64, lock_days: u16) -> Result<()> {
+        instructions::lock_nft(ctx, stake_index, lock_days)
     }
 
     pub fn destake(ctx: Context<Destake>, stake_index: u8) -> Result<()> {

@@ -182,7 +182,7 @@ describe("viridis_staking", () => {
 
   const getStakeTokenInstruction = (amountDecimals: BN, periodDays: number) => {
     return program.methods
-      .stake(amountDecimals, periodDays)
+      .stake(amountDecimals)
       .accounts({
         signer: payer.publicKey,
         mint: mintKeypair.publicKey,
@@ -192,13 +192,13 @@ describe("viridis_staking", () => {
 
   it("should stake tokens successfully", async () => {
     const stakes = [
-      { period: 30, amount: new BN(1_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(2_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(3_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(4_000 * 10 ** DECIMALS) },
-      { period: 60, amount: new BN(5_000 * 10 ** DECIMALS) },
-      { period: 30, amount: new BN(6_000 * 10 ** DECIMALS) },
-      { period: 90, amount: new BN(7_000 * 10 ** DECIMALS) },
+      { amount: new BN(1_000 * 10 ** DECIMALS) },
+      { amount: new BN(2_000 * 10 ** DECIMALS) },
+      { amount: new BN(3_000 * 10 ** DECIMALS) },
+      { amount: new BN(4_000 * 10 ** DECIMALS) },
+      { amount: new BN(5_000 * 10 ** DECIMALS) },
+      { amount: new BN(6_000 * 10 ** DECIMALS) },
+      { amount: new BN(7_000 * 10 ** DECIMALS) },
     ];
 
     const initialBalance = await getTokenBalance(context, addresses.userToken);
@@ -228,7 +228,7 @@ describe("viridis_staking", () => {
     }
 
     const lockInstruction = await program.methods
-      .lockNft(new BN(5))
+      .lockNft(new BN(5), new BN(30))
       .accounts({
         signer: payer.publicKey,
         mint: addresses.nft,

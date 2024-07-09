@@ -36,7 +36,7 @@ pub struct Destake<'info> {
 pub fn destake(ctx: Context<Destake>, stake_index: u8) -> Result<()> {
     let stake_info = &mut ctx.accounts.stake_info_account;
     let clock = Clock::get()?;
-    let current_time = clock.unix_timestamp as u64;
+    let current_time = clock.unix_timestamp;
 
     require!(!stake_info.stakes.is_empty(), ErrorCode::NoStakes);
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
@@ -45,10 +45,10 @@ pub fn destake(ctx: Context<Destake>, stake_index: u8) -> Result<()> {
     require!(!stake_entry.is_destaked, ErrorCode::AlreadyDestaked);
 
     let days_passed = calculate_days_passed(stake_entry.start_time, current_time);
-    require!(days_passed >= u64::from(stake_entry.period), ErrorCode::StakePeriodNotMet);
+    require!(days_passed >= i64::from(stake_entry.stake_lock_days), ErrorCode::StakePeriodNotMet);
 
-    let apy: u64 = get_apy(stake_entry.period)?;
-    let reward: u64 = calculate_reward(stake_entry.amount, apy, days_passed)?;
+    let apy: u16 = get_apy(stake_entry.stake_lock_days)?;
+    let reward: u64 = calculate_reward(stake_entry.amount, apy, days_passed as u64)?;
     let stake_amount = stake_entry.amount;
 
     stake_entry.is_destaked = true;

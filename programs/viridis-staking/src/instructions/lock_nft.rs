@@ -4,7 +4,7 @@ use anchor_spl::{
     metadata::{ Metadata, MetadataAccount },
     token::{ Mint, Token, TokenAccount },
 };
-use crate::utils::transfer_tokens;
+use crate::utils::{ get_apy, transfer_tokens };
 use crate::{ constants::*, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
@@ -55,7 +55,7 @@ pub struct LockNft<'info> {
     pub token_metadata_program: Program<'info, Metadata>,
 }
 
-pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64) -> Result<()> {
+pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64, lock_days: u16) -> Result<()> {
     let LockNft {
         config,
         metadata,
@@ -79,9 +79,11 @@ pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64) -> Result<()> {
 
     require!(stake_entry.nft_lock_time.is_none(), ErrorCode::NftAlreadyLocked);
 
-    let clock = Clock::get()?;
+    let lock_time = Clock::get()?.unix_timestamp;
 
-    stake_entry.nft_lock_time = Some(clock.unix_timestamp);
+    let apy = get_apy(lock_days)?;
+
+    stake_entry.add_nft_info(lock_time, lock_days, apy);
 
     transfer_tokens(
         user_nft_account.to_account_info(),
