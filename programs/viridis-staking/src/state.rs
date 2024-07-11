@@ -30,6 +30,7 @@ pub struct StakeEntry {
     pub nft_lock_days: Option<u16>,
     pub nft_apy: Option<u16>,
     pub is_destaked: bool,
+    pub paid_amount: u64,
 }
 
 impl StakeEntry {
@@ -43,6 +44,7 @@ impl StakeEntry {
             nft_lock_days: None,
             nft_apy: None,
             is_destaked: false,
+            paid_amount: 0,
         }
     }
 
@@ -50,5 +52,9 @@ impl StakeEntry {
         self.nft_lock_time = Some(lock_time);
         self.nft_lock_days = Some(lock_days);
         self.nft_apy = Some(apy);
+    }
+
+    pub fn add_payment(&mut self, payment: u64) {
+        self.paid_amount = self.paid_amount.saturating_add(payment);
     }
 }

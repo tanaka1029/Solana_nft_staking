@@ -24,4 +24,5 @@ pub enum ErrorCode {
     NftAlreadyLocked,
     #[msg("Invalid NFT collection")]
     InvalidCollection,
+    MathOverflow,
 }

@@ -1,26 +1,60 @@
 use anchor_lang::{ prelude::*, system_program };
-use crate::error::ErrorCode;
+use rust_decimal::prelude::*;
+use crate::{ constants::APY_DECIMALS, error::ErrorCode };
 use crate::constants::NFT_DAYS_APY;
 use anchor_spl::token::{ transfer, Transfer };
 
 pub fn get_apy(lock_days: u16) -> Result<u16> {
-    NFT_DAYS_APY.iter()
-        .find(|&&(days, _)| days == lock_days)
-        .map(|&(_, apy)| apy)
-        .ok_or_else(|| ErrorCode::InvalidStakePeriod.into())
+    for (days, apy) in NFT_DAYS_APY {
+        if days == lock_days {
+            return Ok(apy);
+        }
+    }
+    Err(ErrorCode::InvalidStakePeriod.into())
 }
 
-pub fn calculate_reward(stake_amount: u64, apy: u16, days_passed: u64) -> Result<u64> {
-    stake_amount
-        .checked_mul(apy as u64)
-        .and_then(|v| v.checked_div(100))
-        .and_then(|v| v.checked_mul(days_passed))
-        .and_then(|v| v.checked_div(365))
-        .ok_or(ErrorCode::CalculationError.into())
+pub fn calculate_reward(amount: u64, apy: u16, days_passed: u64) -> Option<u64> {
+    msg!("Calculating reward: amount={}, apy={}, days_passed={}", amount, apy, days_passed);
+
+    let d_amount = Decimal::from(amount);
+    let d_apy = Decimal::new(apy as i64, APY_DECIMALS as u32);
+    let d_days_passed = Decimal::from(days_passed);
+
+    msg!(
+        "Decimal conversions: d_amount={}, d_apy={}, d_days_passed={}",
+        d_amount,
+        d_apy,
+        d_days_passed
+    );
+
+    // Calculate daily rate
+    let d_365 = Decimal::from(365);
+    let daily_rate = d_apy.checked_div(d_365)?;
+    msg!("Daily rate: {}", daily_rate);
+
+    // Calculate daily multiplier
+    let d_100 = Decimal::from(100);
+    let daily_multiplier = daily_rate.checked_div(d_100)?;
+    msg!("Daily multiplier: {}", daily_multiplier);
+
+    // Calculate reward
+    let reward = d_amount.checked_mul(daily_multiplier)?.checked_mul(d_days_passed)?;
+    msg!("Calculated reward (Decimal): {}", reward);
+
+    // Convert to u64
+    let result = reward.to_u64();
+    match result {
+        Some(r) => msg!("Final reward (u64): {}", r),
+        None => msg!("Error: Unable to convert reward to u64"),
+    }
+
+    result
 }
 
 pub fn calculate_days_passed(start_time: i64, current_time: i64) -> i64 {
-    current_time.saturating_sub(start_time) / 86400 // 86400 seconds in a day
+    const SECONDS_PER_DAY: i64 = 86400;
+
+    current_time.saturating_sub(start_time).max(0) / SECONDS_PER_DAY
 }
 
 pub fn transfer_tokens<'info>(

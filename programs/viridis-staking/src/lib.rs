@@ -8,6 +8,9 @@ mod error;
 mod state;
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 declare_id!("FnHTgNPMBPPQqk3WhCB9vkreh4qoQ3n6ns6EBoCFaxpF");
 
 #[program]

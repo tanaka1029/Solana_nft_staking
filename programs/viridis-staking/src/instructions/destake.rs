@@ -48,7 +48,10 @@ pub fn destake(ctx: Context<Destake>, stake_index: u8) -> Result<()> {
     require!(days_passed >= i64::from(stake_entry.stake_lock_days), ErrorCode::StakePeriodNotMet);
 
     let apy: u16 = get_apy(stake_entry.stake_lock_days)?;
-    let reward: u64 = calculate_reward(stake_entry.amount, apy, days_passed as u64)?;
+    let reward: u64 = calculate_reward(stake_entry.amount, apy, days_passed as u64).ok_or(
+        ErrorCode::MathOverflow
+    )?;
+
     let stake_amount = stake_entry.amount;
 
     stake_entry.is_destaked = true;

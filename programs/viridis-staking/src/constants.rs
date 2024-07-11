@@ -14,4 +14,4 @@ pub const NFT_DAYS_APY: [(u16, u16); 3] = [
 
 pub const DEFAULT_STAKE_LOCK_DAYS: u16 = 14;
 pub const DEFAULT_BASE_APY: u16 = 550;
-pub const APY_DECIMALS: u16 = 8;
+pub const APY_DECIMALS: u8 = 2;
