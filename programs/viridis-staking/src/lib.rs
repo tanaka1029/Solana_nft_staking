@@ -37,7 +37,15 @@ pub mod viridis_staking {
         instructions::lock_nft(ctx, stake_index, lock_days)
     }
 
-    pub fn destake(ctx: Context<Destake>, stake_index: u8) -> Result<()> {
+    pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
+        instructions::unlock_nft(ctx, stake_index)
+    }
+
+    pub fn claim(ctx: Context<Claim>, stake_index: u64) -> Result<()> {
+        instructions::claim(ctx, stake_index)
+    }
+
+    pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         instructions::destake(ctx, stake_index)
     }
 }

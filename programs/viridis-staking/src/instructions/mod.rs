@@ -13,5 +13,11 @@ pub use stake::*;
 mod lock_nft;
 pub use lock_nft::*;
 
+mod claim;
+pub use claim::*;
+
+mod unlock_nft;
+pub use unlock_nft::*;
+
 mod destake;
 pub use destake::*;

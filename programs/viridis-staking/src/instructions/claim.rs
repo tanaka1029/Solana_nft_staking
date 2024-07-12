@@ -9,7 +9,7 @@ use crate::utils::{ calculate_days_passed, calculate_reward, transfer_tokens };
 
 #[derive(Accounts)]
 #[instruction(stake_index: u64)]
-pub struct Destake<'info> {
+pub struct Claim<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
@@ -39,7 +39,7 @@ pub struct Destake<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
+pub fn claim(ctx: Context<Claim>, stake_index: u64) -> Result<()> {
     let stake_info = &mut ctx.accounts.stake_info_account;
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
 
@@ -48,16 +48,11 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
 
     let current_time = Clock::get()?.unix_timestamp;
 
-    let base_days_passed = calculate_days_passed(stake_entry.start_time, current_time);
-    require!(
-        base_days_passed >= (stake_entry.stake_lock_days as i64),
-        ErrorCode::BaseLockPeriodNotEnded
-    );
-
+    let days_passed = calculate_days_passed(stake_entry.start_time, current_time);
     let base_reward = calculate_reward(
         stake_entry.amount,
         stake_entry.base_apy,
-        base_days_passed as u64
+        days_passed as u64
     ).ok_or(ErrorCode::RewardCalculationFailed)?;
 
     let mut total_reward = base_reward;
@@ -70,7 +65,6 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         )
     {
         let nft_days_passed = calculate_days_passed(nft_lock_time, current_time);
-        require!(nft_days_passed >= (nft_lock_days as i64), ErrorCode::NftLockPeriodNotEnded);
         let effective_days = nft_days_passed.min(nft_lock_days as i64);
         let nft_reward = calculate_reward(stake_entry.amount, nft_apy, effective_days as u64).ok_or(
             ErrorCode::RewardCalculationFailed
@@ -79,16 +73,6 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
     }
 
     let claimable_reward = total_reward.saturating_sub(stake_entry.paid_amount);
-    stake_entry.is_destaked = true;
-
-    transfer_tokens(
-        ctx.accounts.stake_account.to_account_info(),
-        ctx.accounts.user_token_account.to_account_info(),
-        ctx.accounts.stake_account.to_account_info(),
-        stake_entry.amount,
-        ctx.accounts.token_program.to_account_info(),
-        Some(&[&[TOKEN_SEED, ctx.accounts.signer.key.as_ref(), &[ctx.bumps.stake_account]]])
-    )?;
 
     if claimable_reward > 0 {
         stake_entry.add_payment(claimable_reward);
@@ -102,5 +86,6 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
             Some(&[&[VAULT_SEED, &[ctx.bumps.token_vault_account]]])
         )?;
     }
+
     Ok(())
 }

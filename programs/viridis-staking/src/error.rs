@@ -20,9 +20,21 @@ pub enum ErrorCode {
     ArithmeticOverflow,
     #[msg("Failed to reallocate account")]
     ReallocError,
-    #[msg("Nft already locked")]
+    #[msg("NFT already locked")]
     NftAlreadyLocked,
     #[msg("Invalid NFT collection")]
     InvalidCollection,
+    #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Reward calculation failed")]
+    RewardCalculationFailed,
+    #[msg("Base lock period has not ended")]
+    BaseLockPeriodNotEnded,
+    #[msg("NFT lock period has not ended")]
+    NftLockPeriodNotEnded,
+    #[msg("Stake has not been destaked yet")]
+    StakeNotDestaked,
+    #[msg("No NFT is locked in this stake")]
+    NoNftLocked,
+    InvalidNftMint,
 }

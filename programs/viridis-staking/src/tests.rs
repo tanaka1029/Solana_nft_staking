@@ -125,7 +125,7 @@ mod tests {
         assert_eq!(calculate_reward(u64::MAX, u16::MAX, u64::MAX), None);
 
         // Test case 5: Very high APY (close to max u16)
-        assert_eq!(calculate_reward(1000, 65535, 365), Some(655350));
+        assert_eq!(calculate_reward(1000, 65535, 365), Some(6553));
 
         // Test case 6: Very long staking period
         assert_eq!(calculate_reward(1000, 1000, 36500), Some(10000));

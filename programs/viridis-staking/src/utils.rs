@@ -14,39 +14,21 @@ pub fn get_apy(lock_days: u16) -> Result<u16> {
 }
 
 pub fn calculate_reward(amount: u64, apy: u16, days_passed: u64) -> Option<u64> {
-    msg!("Calculating reward: amount={}, apy={}, days_passed={}", amount, apy, days_passed);
-
     let d_amount = Decimal::from(amount);
     let d_apy = Decimal::new(apy as i64, APY_DECIMALS as u32);
     let d_days_passed = Decimal::from(days_passed);
 
-    msg!(
-        "Decimal conversions: d_amount={}, d_apy={}, d_days_passed={}",
-        d_amount,
-        d_apy,
-        d_days_passed
-    );
-
     // Calculate daily rate
     let d_365 = Decimal::from(365);
     let daily_rate = d_apy.checked_div(d_365)?;
-    msg!("Daily rate: {}", daily_rate);
 
-    // Calculate daily multiplier
     let d_100 = Decimal::from(100);
     let daily_multiplier = daily_rate.checked_div(d_100)?;
-    msg!("Daily multiplier: {}", daily_multiplier);
 
     // Calculate reward
     let reward = d_amount.checked_mul(daily_multiplier)?.checked_mul(d_days_passed)?;
-    msg!("Calculated reward (Decimal): {}", reward);
 
-    // Convert to u64
     let result = reward.to_u64();
-    match result {
-        Some(r) => msg!("Final reward (u64): {}", r),
-        None => msg!("Error: Unable to convert reward to u64"),
-    }
 
     result
 }

@@ -77,14 +77,13 @@ export async function airdropSol(
   return newBalance;
 }
 
-export async function createTokenAccountAndCredit(
+export async function setSplToAccount(
   context: ProgramTestContext,
   mint: PublicKey,
   owner: PublicKey,
+  ata: PublicKey,
   amount: bigint
-): Promise<PublicKey> {
-  const ata = getAssociatedTokenAddressSync(mint, owner);
-
+) {
   const tokenAccData = Buffer.alloc(ACCOUNT_SIZE);
   AccountLayout.encode(
     {
@@ -109,6 +108,17 @@ export async function createTokenAccountAndCredit(
     owner: TOKEN_PROGRAM_ID,
     executable: false,
   });
+}
+
+export async function createTokenAccountAndCredit(
+  context: ProgramTestContext,
+  mint: PublicKey,
+  owner: PublicKey,
+  amount: bigint
+): Promise<PublicKey> {
+  const ata = getAssociatedTokenAddressSync(mint, owner, true);
+
+  setSplToAccount(context, mint, owner, ata, amount);
 
   return ata;
 }
