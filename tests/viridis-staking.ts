@@ -6,7 +6,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { BN, Program } from "@coral-xyz/anchor";
+import { BN, Program, workspace } from "@coral-xyz/anchor";
 import { getKeypair } from "../utils";
 import {
   airdropSol,
@@ -25,6 +25,7 @@ import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { TEST_NFT_ADDRESS, TOKEN_METADATA_PROGRAM_ID } from "../const";
 import { deserializeMetaplexMetadata, getNftMetadataAddress } from "./metaplex";
 import { Collection } from "@metaplex-foundation/mpl-token-metadata";
+import Big from "big.js";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -45,7 +46,14 @@ function getNftLockAccount(
 }
 
 describe("viridis_staking", () => {
+  const APY_DECIMALS = 2;
   const DECIMALS = 9;
+
+  const NFT_APY = {
+    [30]: 2950,
+    [60]: 5950,
+    [90]: 10450,
+  };
   const payer = getKeypair(".private/id.json");
   const mintKeypair = Keypair.fromSecretKey(
     new Uint8Array([
@@ -161,7 +169,293 @@ describe("viridis_staking", () => {
     await setupEnvironment(context, program);
   });
 
-  const getStakeTokenInstruction = (amountDecimals: BN, periodDays: number) => {
+  it("Stake 1bil tokens, lock NFT immediately for 90 days, wait for 1 year, claim, wait for 1 day destake", async () => {
+    const config = await program.account.config.fetch(addresses.config);
+
+    const userTokens = 1_000_000_000;
+    const vaultTokens = 5_000_000_000;
+
+    const d_userTokens = d_(userTokens);
+    const d_vaultTokens = d_(vaultTokens);
+
+    const userNftCount = 1;
+    const nftLockPeriod = 90;
+    const nftAPY = NFT_APY[nftLockPeriod];
+
+    credit(userTokens, userNftCount);
+
+    await setSplToAccount(
+      context,
+      mintKeypair.publicKey,
+      addresses.tokenVault,
+      addresses.tokenVault,
+      d_vaultTokens
+    );
+
+    const instructions = [];
+
+    const initInstruction = await program.methods
+      .initializeStakeInfo()
+      .accounts({
+        signer: payer.publicKey,
+        stakeInfo: addresses.stakeInfo,
+      })
+      .instruction();
+
+    const stakeInstruction = await getStakeTokenInstruction(
+      new BN(d_userTokens.toString())
+    );
+
+    const lockInstruction = await program.methods
+      .lockNft(new BN(0), new BN(nftLockPeriod))
+      .accounts({
+        signer: payer.publicKey,
+        mint: addresses.nft,
+      })
+      .instruction();
+
+    instructions.push(initInstruction, stakeInstruction, lockInstruction);
+
+    const messageV0 = new TransactionMessage({
+      payerKey: payer.publicKey,
+      recentBlockhash: context.lastBlockhash,
+      instructions,
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(messageV0);
+    tx.sign([payer]);
+
+    await context.banksClient.processTransaction(tx);
+
+    const stakeInfo = await program.account.stakeInfo.fetch(
+      addresses.stakeInfo
+    );
+
+    const [stake] = stakeInfo.stakes;
+    const userBalanceAfterStaking = await getTokenBalance(
+      context,
+      addresses.userToken
+    );
+
+    const userStakeBalance = await getTokenBalance(
+      context,
+      addresses.userStake
+    );
+
+    expect(userBalanceAfterStaking).to.equal(
+      0n,
+      "updated user balance after staking should equal 0"
+    );
+
+    expect(userStakeBalance).to.equal(
+      d_userTokens,
+      "user stake account should equal initial user balance"
+    );
+
+    expect(BigInt(stake.amount.toString())).to.equal(
+      d_userTokens,
+      "stake account should hold initial user balance"
+    );
+
+    expect(stake.baseApy).to.equal(
+      config.baseApy,
+      "stake base apy should equal config base apy"
+    );
+
+    expect(stake.stakeLockDays).to.equal(
+      config.baseLockDays,
+      "stake lock days should equal config lock days"
+    );
+
+    expect(stake.isDestaked).to.equal(false, "stake shouldnt be destaked");
+
+    expect(stake.nftLockDays).to.equal(
+      nftLockPeriod,
+      "nft lock days should equal nftLockPeriod param"
+    );
+
+    expect(stake.nftApy).to.equal(
+      nftAPY,
+      "nft apy should equal APY from the constant"
+    );
+
+    expect(stake.nftUnlockTime).to.equal(
+      null,
+      "stake unlock time should equal null"
+    );
+    expect(stake.paidAmount.toNumber()).to.equal(
+      0,
+      "stake paid amount should be zero"
+    );
+
+    expect(stake.nftLockTime.toNumber()).to.equal(
+      stake.startTime.toNumber(),
+      "stake start time and nft lock time should be the same"
+    );
+
+    const currentClock = await context.banksClient.getClock();
+
+    expect(stake.nftLockTime.toNumber()).to.equal(
+      stake.startTime.toNumber(),
+      "stake start time and nft lock time should be the same"
+    );
+
+    expect(stake.startTime).to.not.equal(
+      null,
+      "stake start time shouldnt be null"
+    );
+
+    expect(stake.nftLockTime).to.not.equal(
+      null,
+      "stake nft lock time shouldnt be null"
+    );
+
+    const ONE_DAY_SECONDS = 24 * 60 * 60;
+    const ONE_YEAR_SECONDS = ONE_DAY_SECONDS * 365;
+    const oneYearFromNow =
+      currentClock.unixTimestamp + BigInt(ONE_YEAR_SECONDS);
+
+    context.setClock(
+      new Clock(
+        currentClock.slot,
+        currentClock.epochStartTimestamp,
+        currentClock.epoch,
+        currentClock.leaderScheduleEpoch,
+        oneYearFromNow
+      )
+    );
+
+    const baseAPY = stake.baseApy;
+    const totalAPY = baseAPY + nftAPY;
+    const yearInDays = 365;
+
+    const expectedAnnualReward = calculateReward(
+      stake.amount,
+      totalAPY,
+      yearInDays
+    );
+
+    await program.methods
+      .claim(new BN(0))
+      .accounts({
+        signer: payer.publicKey,
+        mint: mintKeypair.publicKey,
+      })
+      .signers([payer])
+      .rpc();
+
+    const userBalanceAfterClaim = await getTokenBalance(
+      context,
+      addresses.userToken
+    );
+
+    expect(BigInt(expectedAnnualReward)).to.equal(
+      userBalanceAfterClaim,
+      "User balance should have expected reward"
+    );
+
+    const stakeInfoAfterClaim = await program.account.stakeInfo.fetch(
+      addresses.stakeInfo
+    );
+
+    const [stakeAfterClaim] = stakeInfoAfterClaim.stakes;
+
+    expect(BigInt(expectedAnnualReward)).to.equal(
+      BigInt(stakeAfterClaim.paidAmount),
+      "Paid amount should equal expected reward"
+    );
+
+    const clockAfterClaim = await context.banksClient.getClock();
+    const oneDayAfterClaim =
+      clockAfterClaim.unixTimestamp + BigInt(ONE_DAY_SECONDS);
+
+    context.setClock(
+      new Clock(
+        clockAfterClaim.slot,
+        clockAfterClaim.epochStartTimestamp,
+        clockAfterClaim.epoch,
+        clockAfterClaim.leaderScheduleEpoch,
+        oneDayAfterClaim
+      )
+    );
+
+    await program.methods
+      .destake(new BN(0))
+      .accounts({
+        signer: payer.publicKey,
+        mint: mintKeypair.publicKey,
+      })
+      .signers([payer])
+      .rpc();
+
+    const expectedSingleDayBaseReward = calculateReward(
+      stake.amount,
+      baseAPY,
+      1
+    );
+
+    const expectedSingleDayNftReward = calculateReward(stake.amount, nftAPY, 1);
+
+    const userBalanceAfterDestake = await getTokenBalance(
+      context,
+      addresses.userToken
+    );
+
+    const expectedDailyReward =
+      expectedSingleDayBaseReward + expectedSingleDayNftReward;
+
+    expect(BigInt(userBalanceAfterDestake)).to.equal(
+      BigInt(expectedAnnualReward) + d_userTokens + BigInt(expectedDailyReward),
+      "User balance after destake should equal the sum of expectedAnnualReward + d_userTokens + expectedDailyReward"
+    );
+
+    const vaultBalanceAfterDestake = await getTokenBalance(
+      context,
+      addresses.tokenVault
+    );
+
+    expect(BigInt(vaultBalanceAfterDestake)).to.equal(
+      d_vaultTokens -
+        BigInt(expectedAnnualReward) -
+        BigInt(expectedDailyReward),
+      "Vault after destake should equal the sum of all paid rewards"
+    );
+
+    const stakeInfoAfterDestake = await program.account.stakeInfo.fetch(
+      addresses.stakeInfo
+    );
+
+    const [stakeAfterDestake] = stakeInfoAfterDestake.stakes;
+
+    console.log(stakeAfterDestake);
+  });
+
+  function calculateReward(
+    amount: number,
+    apy: number,
+    daysPassed: number
+  ): number | null {
+    try {
+      const bAmount = new Big(amount);
+      const bApy = new Big(apy).div(Big(10).pow(APY_DECIMALS));
+      const bDaysPassed = new Big(daysPassed);
+
+      const b365 = new Big(365);
+      const dailyRate = bApy.div(b365);
+
+      const b100 = new Big(100);
+      const dailyMultiplier = dailyRate.div(b100);
+
+      const reward = bAmount.mul(dailyMultiplier).mul(bDaysPassed);
+
+      return reward.round(undefined, 0).toNumber();
+    } catch (error) {
+      console.error("Error in calculateReward:", error);
+      return null;
+    }
+  }
+
+  async function getStakeTokenInstruction(amountDecimals: BN) {
     return program.methods
       .stake(amountDecimals)
       .accounts({
@@ -169,10 +463,14 @@ describe("viridis_staking", () => {
         mint: mintKeypair.publicKey,
       })
       .instruction();
-  };
+  }
 
-  async function credit(tokenAmount: number, nftAmount: number) {
-    const userTokenDecimals = BigInt(tokenAmount * 10 ** DECIMALS);
+  function d_(amount: number): bigint {
+    return BigInt(amount * 10 ** DECIMALS);
+  }
+
+  async function credit(tokenAmount: number | bigint, nftAmount: number) {
+    const userTokenDecimals = d_(Number(tokenAmount));
 
     if (tokenAmount) {
       await createTokenAccountAndCredit(
@@ -192,422 +490,4 @@ describe("viridis_staking", () => {
       );
     }
   }
-
-  it("Stake 5000 tokens, lock NFT immediately for 90 days, wait for 90 days, ", async () => {
-    const userTokenCount = 5_000;
-    const userNftCount = 1;
-
-    credit(userTokenCount, userNftCount);
-
-    const initialBalance = await getTokenBalance(context, addresses.userToken);
-
-    console.log(initialBalance);
-  });
-
-  // credit tokens
-
-  return;
-
-  it("should stake tokens successfully", async () => {
-    const stakes = [
-      { amount: new BN(1_000 * 10 ** DECIMALS) },
-      { amount: new BN(2_000 * 10 ** DECIMALS) },
-      { amount: new BN(3_000 * 10 ** DECIMALS) },
-      { amount: new BN(4_000 * 10 ** DECIMALS) },
-      { amount: new BN(5_000 * 10 ** DECIMALS) },
-      { amount: new BN(6_000 * 10 ** DECIMALS) },
-      { amount: new BN(7_000 * 10 ** DECIMALS) },
-    ];
-
-    const initialBalance = await getTokenBalance(context, addresses.userToken);
-    const totalStakedAmount = stakes.reduce(
-      (sum, stake) => sum.add(stake.amount),
-      new BN(0)
-    );
-
-    const instructions = [];
-
-    const initInstruction = await program.methods
-      .initializeStakeInfo()
-      .accounts({
-        signer: payer.publicKey,
-        stakeInfo: addresses.stakeInfo,
-      })
-      .instruction();
-
-    instructions.push(initInstruction);
-
-    for (const stake of stakes) {
-      const stakeInstruction = await getStakeTokenInstruction(
-        stake.amount,
-        stake.period
-      );
-      instructions.push(stakeInstruction);
-    }
-
-    const lockInstruction = await program.methods
-      .lockNft(new BN(5), new BN(30))
-      .accounts({
-        signer: payer.publicKey,
-        mint: addresses.nft,
-      })
-      .instruction();
-
-    instructions.push(lockInstruction);
-
-    const messageV0 = new TransactionMessage({
-      payerKey: payer.publicKey,
-      recentBlockhash: context.lastBlockhash,
-      instructions,
-    }).compileToV0Message();
-
-    const tx = new VersionedTransaction(messageV0);
-    tx.sign([payer]);
-
-    await context.banksClient.processTransaction(tx);
-
-    const stakeInfo = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
-    const updatedBalance = await getTokenBalance(context, addresses.userToken);
-
-    expect(updatedBalance).to.equal(
-      initialBalance - BigInt(totalStakedAmount.toString()),
-      "Updated user stake account should reflect the total staked amount"
-    );
-
-    stakes.forEach((expectedStake, index) => {
-      const actualStake = stakeInfo.stakes[index];
-
-      expect(
-        expectedStake.amount.eq(actualStake.amount),
-        `Stake ${index} amount mismatch`
-      ).to.be.true;
-    });
-  });
-
-  // it("should stake tokens, warp time, and claim rewards successfully", async () => {
-  //   await program.methods
-  //     .initializeStakeInfo()
-  //     .accounts({
-  //       signer: payer.publicKey,
-  //       stakeInfo: addresses.stakeInfo,
-  //     })
-  //     .signers([payer])
-  //     .rpc();
-
-  //   // Stake tokens
-  //   const stakeAmount = new BN(10_000 * 10 ** DECIMALS);
-  //   await program.methods
-  //     .stake(stakeAmount)
-  //     .accounts({
-  //       signer: payer.publicKey,
-  //       mint: mintKeypair.publicKey,
-  //     })
-  //     .signers([payer])
-  //     .rpc();
-
-  //   // Lock NFT
-  //   await program.methods
-  //     .lockNft(new BN(0), new BN(30))
-  //     .accounts({
-  //       signer: payer.publicKey,
-  //       mint: addresses.nft,
-  //     })
-  //     .signers([payer])
-  //     .rpc();
-
-  //   await setSplToAccount(
-  //     context,
-  //     mintKeypair.publicKey,
-  //     addresses.tokenVault,
-  //     addresses.tokenVault,
-  //     BigInt(150_000_000 * 10 ** DECIMALS)
-  //   );
-
-  //   // Get initial balances
-  //   const initialUserBalance = await getTokenBalance(
-  //     context,
-  //     addresses.userToken
-  //   );
-  //   const initialVaultBalance = await getTokenBalance(
-  //     context,
-  //     addresses.tokenVault
-  //   );
-
-  //   const currentClock = await context.banksClient.getClock();
-
-  //   // Warp time forward by 1 day
-  //   const ONE_DAY_IN_SECONDS = 24 * 60 * 60;
-  //   const newTimestamp =
-  //     currentClock.unixTimestamp + BigInt(ONE_DAY_IN_SECONDS);
-
-  //   context.setClock(
-  //     new Clock(
-  //       currentClock.slot,
-  //       currentClock.epochStartTimestamp,
-  //       currentClock.epoch,
-  //       currentClock.leaderScheduleEpoch,
-  //       newTimestamp
-  //     )
-  //   );
-
-  //   // Claim rewards
-  //   await program.methods
-  //     .claim(new BN(0))
-  //     .accounts({
-  //       signer: payer.publicKey,
-  //       mint: mintKeypair.publicKey,
-  //     })
-  //     .signers([payer])
-  //     .rpc();
-
-  //   // Get updated balances
-  //   const updatedUserBalance = await getTokenBalance(
-  //     context,
-  //     addresses.userToken
-  //   );
-  //   const updatedVaultBalance = await getTokenBalance(
-  //     context,
-  //     addresses.tokenVault
-  //   );
-
-  //   console.log(updatedUserBalance);
-  //   console.log(updatedVaultBalance);
-
-  //   // Fetch stake info
-  //   const stakeInfo = await program.account.stakeInfo.fetch(
-  //     addresses.stakeInfo
-  //   );
-
-  //   console.log(stakeInfo);
-
-  //   // Fetch config to get APY values
-  //   const config = await program.account.config.fetch(addresses.config);
-
-  //   console.log(config);
-
-  //   // Calculate expected reward
-  //   const baseAPY = config.baseApy;
-  //   const nftAPY = 2950; // Assuming 30 days lock period
-  //   const totalAPY = baseAPY + nftAPY;
-  //   const yearInDays = 365;
-  //   const expectedReward =
-  //     (BigInt(stakeAmount.toString()) * BigInt(totalAPY) * BigInt(1)) /
-  //     BigInt(yearInDays * 10000);
-
-  //   expect(Number(updatedUserBalance)).to.be.greaterThan(
-  //     Number(initialUserBalance),
-  //     "User balance should increase after claiming"
-  //   );
-  //   // expect(updatedVaultBalance).to.be.lessThan(
-  //   //   initialVaultBalance,
-  //   //   "Vault balance should decrease after claiming"
-  //   // );
-
-  //   const actualReward = updatedUserBalance - initialUserBalance;
-
-  //   console.log(actualReward);
-  //   console.log(expectedReward);
-  //   expect(Number(actualReward)).to.be.closeTo(
-  //     Number(expectedReward),
-  //     Number(expectedReward) / 100,
-  //     "Claimed reward should be close to expected reward"
-  //   );
-
-  //   // expect(stakeInfo.stakes[0].paidAmount.toString()).to.equal(
-  //   //   actualReward.toString(),
-  //   //   "Paid amount in stake info should match claimed reward"
-  //   // );
-
-  //   // // Additional checks based on the updated state
-  //   // expect(stakeInfo.stakes[0].amount.toString()).to.equal(
-  //   //   stakeAmount.toString(),
-  //   //   "Staked amount should match"
-  //   // );
-  //   // expect(stakeInfo.stakes[0].baseApy).to.equal(
-  //   //   baseAPY,
-  //   //   "Base APY should match"
-  //   // );
-  //   // expect(stakeInfo.stakes[0].nftApy).to.equal(nftAPY, "NFT APY should match");
-  //   // expect(stakeInfo.stakes[0].nftLockDays).to.equal(
-  //   //   30,
-  //   //   "NFT lock days should match"
-  //   // );
-  // });
-
-  it("should stake tokens, warp time, and destake successfully", async () => {
-    await program.methods
-      .initializeStakeInfo()
-      .accounts({
-        signer: payer.publicKey,
-        stakeInfo: addresses.stakeInfo,
-      })
-      .signers([payer])
-      .rpc();
-
-    // Stake tokens
-    const stakeAmount = new BN(10_000 * 10 ** DECIMALS);
-    await program.methods
-      .stake(stakeAmount)
-      .accounts({
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey,
-      })
-      .signers([payer])
-      .rpc();
-
-    // Lock NFT
-    await program.methods
-      .lockNft(new BN(0), new BN(30))
-      .accounts({
-        signer: payer.publicKey,
-        mint: addresses.nft,
-      })
-      .signers([payer])
-      .rpc();
-
-    await setSplToAccount(
-      context,
-      mintKeypair.publicKey,
-      addresses.tokenVault,
-      addresses.tokenVault,
-      BigInt(150_000_000 * 10 ** DECIMALS)
-    );
-
-    // Get initial balances
-    const initialUserBalance = await getTokenBalance(
-      context,
-      addresses.userToken
-    );
-    const initialVaultBalance = await getTokenBalance(
-      context,
-      addresses.tokenVault
-    );
-
-    const currentClock = await context.banksClient.getClock();
-
-    // Warp time forward by 1 day
-    const ONE_DAY_IN_SECONDS = 24 * 60 * 60;
-    const newTimestamp =
-      currentClock.unixTimestamp + BigInt(ONE_DAY_IN_SECONDS);
-
-    context.setClock(
-      new Clock(
-        currentClock.slot,
-        currentClock.epochStartTimestamp,
-        currentClock.epoch,
-        currentClock.leaderScheduleEpoch,
-        newTimestamp
-      )
-    );
-
-    // Claim rewards
-    await program.methods
-      .claim(new BN(0))
-      .accounts({
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey,
-      })
-      .signers([payer])
-      .rpc();
-
-    // Get updated balances
-    const updatedUserBalance = await getTokenBalance(
-      context,
-      addresses.userToken
-    );
-    const updatedVaultBalance = await getTokenBalance(
-      context,
-      addresses.tokenVault
-    );
-
-    console.log(updatedUserBalance);
-    console.log(updatedVaultBalance);
-
-    // Fetch stake info
-    const stakeInfo = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
-
-    console.log(stakeInfo);
-
-    // Fetch config to get APY values
-    const config = await program.account.config.fetch(addresses.config);
-
-    console.log(config);
-
-    // Calculate expected reward
-    const baseAPY = config.baseApy;
-    const nftAPY = 2950; // Assuming 30 days lock period
-    const totalAPY = baseAPY + nftAPY;
-    const yearInDays = 365;
-    const expectedReward =
-      (BigInt(stakeAmount.toString()) * BigInt(totalAPY) * BigInt(1)) /
-      BigInt(yearInDays * 10000);
-
-    expect(Number(updatedUserBalance)).to.be.greaterThan(
-      Number(initialUserBalance),
-      "User balance should increase after claiming"
-    );
-    // expect(updatedVaultBalance).to.be.lessThan(
-    //   initialVaultBalance,
-    //   "Vault balance should decrease after claiming"
-    // );
-
-    const actualReward = updatedUserBalance - initialUserBalance;
-
-    console.log(actualReward);
-    console.log(expectedReward);
-    expect(Number(actualReward)).to.be.closeTo(
-      Number(expectedReward),
-      Number(expectedReward) / 100,
-      "Claimed reward should be close to expected reward"
-    );
-
-    // expect(stakeInfo.stakes[0].paidAmount.toString()).to.equal(
-    //   actualReward.toString(),
-    //   "Paid amount in stake info should match claimed reward"
-    // );
-
-    // // Additional checks based on the updated state
-    // expect(stakeInfo.stakes[0].amount.toString()).to.equal(
-    //   stakeAmount.toString(),
-    //   "Staked amount should match"
-    // );
-    // expect(stakeInfo.stakes[0].baseApy).to.equal(
-    //   baseAPY,
-    //   "Base APY should match"
-    // );
-    // expect(stakeInfo.stakes[0].nftApy).to.equal(nftAPY, "NFT APY should match");
-    // expect(stakeInfo.stakes[0].nftLockDays).to.equal(
-    //   30,
-    //   "NFT lock days should match"
-    // );
-
-    const currentClock2 = await context.banksClient.getClock();
-
-    // Warp time forward by 1 day
-    const secondWarpStamp =
-      currentClock.unixTimestamp + BigInt(ONE_DAY_IN_SECONDS) * 30n;
-
-    context.setClock(
-      new Clock(
-        currentClock2.slot,
-        currentClock2.epochStartTimestamp,
-        currentClock2.epoch,
-        currentClock2.leaderScheduleEpoch,
-        secondWarpStamp
-      )
-    );
-
-    await program.methods
-      .destake(new BN(0))
-      .accounts({
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey,
-      })
-      .signers([payer])
-      .rpc();
-  });
 });

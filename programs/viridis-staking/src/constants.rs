@@ -6,7 +6,7 @@ pub const NFT_SEED: &[u8] = b"nft";
 
 pub const METADATA_SEED: &[u8] = b"metadata";
 
-pub const NFT_DAYS_APY: [(u16, u16); 3] = [
+pub const DEFAULT_NFT_DAYS_APY: [(u16, u16); 3] = [
     (30, 2950),
     (60, 5950),
     (90, 10450),

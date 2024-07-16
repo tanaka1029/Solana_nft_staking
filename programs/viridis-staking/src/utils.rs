@@ -1,11 +1,11 @@
 use anchor_lang::{ prelude::*, system_program };
 use rust_decimal::prelude::*;
 use crate::{ constants::APY_DECIMALS, error::ErrorCode };
-use crate::constants::NFT_DAYS_APY;
+use crate::constants::DEFAULT_NFT_DAYS_APY;
 use anchor_spl::token::{ transfer, Transfer };
 
 pub fn get_apy(lock_days: u16) -> Result<u16> {
-    for (days, apy) in NFT_DAYS_APY {
+    for (days, apy) in DEFAULT_NFT_DAYS_APY {
         if days == lock_days {
             return Ok(apy);
         }

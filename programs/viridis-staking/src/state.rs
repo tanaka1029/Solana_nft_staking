@@ -1,4 +1,3 @@
-use std::mem::size_of;
 use anchor_lang::prelude::*;
 
 #[account]
@@ -11,7 +10,7 @@ pub struct Config {
 
 impl Config {
     pub fn len() -> usize {
-        8 + 2 * size_of::<Pubkey>() + size_of::<u16>() + size_of::<u32>()
+        8 + 32 + 32 + 2 + 2
     }
 }
 

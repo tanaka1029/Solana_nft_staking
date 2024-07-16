@@ -5,6 +5,13 @@ mod tests {
 
     #[test]
     fn test_calculate_reward() {
+        let amount = 1000000000000000000;
+        let apy = 11000;
+        let days = 1;
+        println!("\nTest case 0:");
+        let result = calculate_reward(amount, apy, days);
+        assert_eq!(result, Some(3013698630136986));
+
         // Test case 1: 1000 tokens, 10% APY, 365 days
         let amount = 1000;
         let apy = 1000; // 10.00% with 2 decimals

@@ -10,7 +10,7 @@ pub struct Initialize<'info> {
     pub signer: Signer<'info>,
 
     #[account(init, seeds = [CONFIG_SEED], bump, payer = signer, space = Config::len())]
-    pub config: Account<'info, Config>,
+    pub program_config: Account<'info, Config>,
 
     #[account(
         init,
@@ -31,7 +31,8 @@ pub struct Initialize<'info> {
 }
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-    let config = &mut ctx.accounts.config;
+    let config = &mut ctx.accounts.program_config;
+
     config.admin = ctx.accounts.signer.key();
     config.nft_collection = ctx.accounts.nft_collection.key();
     config.base_lock_days = DEFAULT_STAKE_LOCK_DAYS;

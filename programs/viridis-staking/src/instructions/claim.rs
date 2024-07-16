@@ -57,18 +57,14 @@ pub fn claim(ctx: Context<Claim>, stake_index: u64) -> Result<()> {
 
     let mut total_reward = base_reward;
 
-    if
-        let (Some(nft_lock_time), Some(nft_lock_days), Some(nft_apy)) = (
-            stake_entry.nft_lock_time,
-            stake_entry.nft_lock_days,
-            stake_entry.nft_apy,
-        )
-    {
+    if let (Some(nft_lock_time), Some(nft_apy)) = (stake_entry.nft_lock_time, stake_entry.nft_apy) {
         let nft_days_passed = calculate_days_passed(nft_lock_time, current_time);
-        let effective_days = nft_days_passed.min(nft_lock_days as i64);
-        let nft_reward = calculate_reward(stake_entry.amount, nft_apy, effective_days as u64).ok_or(
-            ErrorCode::RewardCalculationFailed
-        )?;
+
+        let nft_reward = calculate_reward(
+            stake_entry.amount,
+            nft_apy,
+            nft_days_passed as u64
+        ).ok_or(ErrorCode::RewardCalculationFailed)?;
         total_reward += nft_reward;
     }
 

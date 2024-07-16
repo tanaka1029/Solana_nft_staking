@@ -71,10 +71,11 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
     {
         let nft_days_passed = calculate_days_passed(nft_lock_time, current_time);
         require!(nft_days_passed >= (nft_lock_days as i64), ErrorCode::NftLockPeriodNotEnded);
-        let effective_days = nft_days_passed.min(nft_lock_days as i64);
-        let nft_reward = calculate_reward(stake_entry.amount, nft_apy, effective_days as u64).ok_or(
-            ErrorCode::RewardCalculationFailed
-        )?;
+        let nft_reward = calculate_reward(
+            stake_entry.amount,
+            nft_apy,
+            nft_days_passed as u64
+        ).ok_or(ErrorCode::RewardCalculationFailed)?;
         total_reward += nft_reward;
     }
 
