@@ -87,14 +87,23 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
     let clock = Clock::get()?;
     stake_entry.nft_unlock_time = Some(clock.unix_timestamp);
 
-    // Transfer the NFT back to the user
+    // // Transfer the NFT back to the user
     transfer_tokens(
         nft_lock_account.to_account_info(),
         user_nft_account.to_account_info(),
         nft_lock_account.to_account_info(),
         1,
         token_program.to_account_info(),
-        None
+        Some(
+            &[
+                &[
+                    NFT_SEED,
+                    ctx.accounts.signer.key.as_ref(),
+                    &stake_index.to_le_bytes(),
+                    &[ctx.bumps.nft_lock_account],
+                ],
+            ]
+        )
     )?;
 
     Ok(())

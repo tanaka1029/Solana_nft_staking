@@ -427,7 +427,32 @@ describe("viridis_staking", () => {
 
     const [stakeAfterDestake] = stakeInfoAfterDestake.stakes;
 
-    console.log(stakeAfterDestake);
+    expect(stakeAfterDestake.isDestaked).to.equal(
+      true,
+      "stake should have destaked status"
+    );
+
+    const clockAfterDestake = await context.banksClient.getClock();
+
+    await program.methods
+      .unlockNft(new BN(0))
+      .accounts({
+        signer: payer.publicKey,
+        mint: addresses.nft,
+      })
+      .signers([payer])
+      .rpc();
+
+    const stakeInfoAfterNftUnlock = await program.account.stakeInfo.fetch(
+      addresses.stakeInfo
+    );
+
+    const [stakeAfterNftUnlock] = stakeInfoAfterNftUnlock.stakes;
+
+    expect(BigInt(stakeAfterNftUnlock.nftUnlockTime)).to.equal(
+      clockAfterDestake.unixTimestamp,
+      "stake unlock time should equal current block timestamp"
+    );
   });
 
   function calculateReward(
