@@ -61,6 +61,7 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
     ).ok_or(ErrorCode::RewardCalculationFailed)?;
 
     let mut total_reward = base_reward;
+    msg!("paid amount {}", base_reward);
 
     if
         let (Some(nft_lock_time), Some(nft_lock_days), Some(nft_apy)) = (
@@ -77,10 +78,13 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
             nft_days_passed as u64
         ).ok_or(ErrorCode::RewardCalculationFailed)?;
         total_reward += nft_reward;
+        msg!("paid amount {}", nft_reward);
     }
 
     let claimable_reward = total_reward.saturating_sub(stake_entry.paid_amount);
     stake_entry.is_destaked = true;
+
+    msg!("paid amount {}", stake_entry.paid_amount);
 
     transfer_tokens(
         ctx.accounts.stake_account.to_account_info(),
@@ -93,6 +97,8 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
 
     if claimable_reward > 0 {
         stake_entry.add_payment(claimable_reward);
+
+        msg!("paid amount {}", stake_entry.paid_amount);
 
         transfer_tokens(
             ctx.accounts.token_vault_account.to_account_info(),
