@@ -6,7 +6,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { BN, Program, workspace } from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
 import { getKeypair } from "../utils";
 import {
   airdropSol,
@@ -23,34 +23,20 @@ import IDL from "../target/idl/viridis_staking.json";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { TEST_NFT_ADDRESS, TOKEN_METADATA_PROGRAM_ID } from "../const";
 import { deserializeMetaplexMetadata, getNftMetadataAddress } from "./metaplex";
-import { Collection } from "@metaplex-foundation/mpl-token-metadata";
 import Big from "big.js";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
 
-const getNftLockAccount = (
-  stakeIndex: number,
-  payer: PublicKey,
-  programId: PublicKey
-): PublicKey => {
-  return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from("nft"),
-      payer.toBuffer(),
-      Buffer.from(new Uint8Array(new BN(stakeIndex).toArray("le", 8))),
-    ],
-    programId
-  )[0];
-};
-
 describe("viridis_staking", () => {
+  // Constants
   const APY_DECIMALS = 2;
   const DECIMALS = 9;
   const NFT_APY = { 30: 2950, 60: 5950, 90: 10450 };
   const ONE_DAY_SECONDS = 24 * 60 * 60;
   const ONE_YEAR_SECONDS = ONE_DAY_SECONDS * 365;
 
+  // Test setup
   const payer = getKeypair(".private/id.json");
   const mintKeypair = Keypair.fromSecretKey(
     new Uint8Array([
@@ -73,29 +59,20 @@ describe("viridis_staking", () => {
   let context: ProgramTestContext;
   let provider: BankrunProvider;
   let program: Program<ViridisStaking>;
-  let addresses: {
-    config: PublicKey;
-    userStake: PublicKey;
-    userToken: PublicKey;
-    userNft: PublicKey;
-    tokenVault: PublicKey;
-    stakeInfo: PublicKey;
-    nft: PublicKey;
-    metadata: PublicKey;
-    nftCollection: PublicKey;
-  };
+  let addresses: Awaited<ReturnType<typeof setupAddresses>>;
 
+  // Helper functions
   const setupAddresses = async (programId: PublicKey) => {
     const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
     const metadataInfo = await context.banksClient.getAccount(metadataAddress);
     const metadata = deserializeMetaplexMetadata(metadataAddress, metadataInfo);
 
-    let nftCollection: Collection;
-    if (metadata.collection.__option === "Some" && metadata.collection.value) {
-      nftCollection = metadata.collection.value;
-    } else {
-      throw new Error("NFT collection is missing or invalid");
-    }
+    const nftCollection =
+      metadata.collection.__option === "Some" && metadata.collection.value
+        ? metadata.collection.value
+        : (() => {
+            throw new Error("NFT collection is missing or invalid");
+          })();
 
     const nftCollectionAddress = new PublicKey(nftCollection.key);
 
@@ -153,14 +130,21 @@ describe("viridis_staking", () => {
     ]);
   };
 
-  beforeEach(async () => {
-    const seedAccounts = await getSeedAccounts();
-    context = await startAnchor("", [], seedAccounts);
-    provider = new BankrunProvider(context);
-    program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
-    addresses = await setupAddresses(program.programId);
-    await setupEnvironment(context, program);
-  });
+  // Function to simulate time passage
+  async function simulateTimePassage(secondsToAdd) {
+    const currentClock = await context.banksClient.getClock();
+    const newTimestamp = currentClock.unixTimestamp + BigInt(secondsToAdd);
+
+    const newClock = new Clock(
+      currentClock.slot,
+      currentClock.epochStartTimestamp,
+      currentClock.epoch,
+      currentClock.leaderScheduleEpoch,
+      newTimestamp
+    );
+
+    context.setClock(newClock);
+  }
 
   const calculateReward = (
     amount: number,
@@ -191,16 +175,21 @@ describe("viridis_staking", () => {
       .instruction();
   };
 
-  const d_ = (amount: number): bigint => BigInt(amount * 10 ** DECIMALS);
+  const d = (amount: number): bigint => BigInt(amount * 10 ** DECIMALS);
 
-  const credit = async (tokenAmount: number | bigint, nftAmount: number) => {
-    const userTokenDecimals = d_(Number(tokenAmount));
+  const credit = async (
+    tokenAmount: number | bigint,
+    vaultAmount: number | bigint,
+    nftAmount: number
+  ) => {
+    const dUserTokens = d(Number(tokenAmount));
+    const dVaultTokens = d(Number(vaultAmount));
     if (tokenAmount) {
       await createTokenAccountAndCredit(
         context,
         mintKeypair.publicKey,
         payer.publicKey,
-        userTokenDecimals
+        dUserTokens
       );
     }
     if (nftAmount) {
@@ -211,27 +200,41 @@ describe("viridis_staking", () => {
         BigInt(nftAmount)
       );
     }
+
+    if (vaultAmount) {
+      await setSplToAccount(
+        context,
+        mintKeypair.publicKey,
+        addresses.tokenVault,
+        addresses.tokenVault,
+        dVaultTokens
+      );
+    }
   };
 
+  // Test setup
+  beforeEach(async () => {
+    const seedAccounts = await getSeedAccounts();
+    context = await startAnchor("", [], seedAccounts);
+    provider = new BankrunProvider(context);
+    program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
+    addresses = await setupAddresses(program.programId);
+    await setupEnvironment(context, program);
+  });
+
+  // Tests
   it("Stake 1bil tokens, lock NFT immediately for 90 days, wait for 1 year, claim, wait for 1 day destake", async () => {
     const config = await program.account.config.fetch(addresses.config);
 
     const userTokens = 1_000_000_000;
     const vaultTokens = 5_000_000_000;
-    const d_userTokens = d_(userTokens);
-    const d_vaultTokens = d_(vaultTokens);
+    const dUserTokens = d(userTokens);
+    const dVaultTokens = d(vaultTokens);
     const userNftCount = 1;
     const nftLockPeriod = 90;
     const nftAPY = NFT_APY[nftLockPeriod];
 
-    await credit(userTokens, userNftCount);
-    await setSplToAccount(
-      context,
-      mintKeypair.publicKey,
-      addresses.tokenVault,
-      addresses.tokenVault,
-      d_vaultTokens
-    );
+    await credit(userTokens, vaultTokens, userNftCount);
 
     const instructions = [
       await program.methods
@@ -241,7 +244,7 @@ describe("viridis_staking", () => {
           stakeInfo: addresses.stakeInfo,
         })
         .instruction(),
-      await getStakeTokenInstruction(new BN(d_userTokens.toString())),
+      await getStakeTokenInstruction(new BN(dUserTokens.toString())),
       await program.methods
         .lockNft(new BN(0), new BN(nftLockPeriod))
         .accounts({
@@ -274,16 +277,17 @@ describe("viridis_staking", () => {
       addresses.userStake
     );
 
+    // Assertions for initial staking
     expect(userBalanceAfterStaking).to.equal(
       0n,
       "updated user balance after staking should equal 0"
     );
     expect(userStakeBalance).to.equal(
-      d_userTokens,
+      dUserTokens,
       "user stake account should equal initial user balance"
     );
     expect(BigInt(stake.amount.toString())).to.equal(
-      d_userTokens,
+      dUserTokens,
       "stake account should hold initial user balance"
     );
     expect(stake.baseApy).to.equal(
@@ -324,18 +328,7 @@ describe("viridis_staking", () => {
       "stake nft lock time shouldnt be null"
     );
 
-    const currentClock = await context.banksClient.getClock();
-    const oneYearFromNow =
-      currentClock.unixTimestamp + BigInt(ONE_YEAR_SECONDS);
-    context.setClock(
-      new Clock(
-        currentClock.slot,
-        currentClock.epochStartTimestamp,
-        currentClock.epoch,
-        currentClock.leaderScheduleEpoch,
-        oneYearFromNow
-      )
-    );
+    await simulateTimePassage(ONE_YEAR_SECONDS);
 
     const baseAPY = stake.baseApy;
     const totalAPY = baseAPY + nftAPY;
@@ -346,6 +339,7 @@ describe("viridis_staking", () => {
       yearInDays
     );
 
+    // Claim rewards
     await program.methods
       .claim(new BN(0))
       .accounts({
@@ -373,19 +367,9 @@ describe("viridis_staking", () => {
       "Paid amount should equal expected reward"
     );
 
-    const clockAfterClaim = await context.banksClient.getClock();
-    const oneDayAfterClaim =
-      clockAfterClaim.unixTimestamp + BigInt(ONE_DAY_SECONDS);
-    context.setClock(
-      new Clock(
-        clockAfterClaim.slot,
-        clockAfterClaim.epochStartTimestamp,
-        clockAfterClaim.epoch,
-        clockAfterClaim.leaderScheduleEpoch,
-        oneDayAfterClaim
-      )
-    );
+    await simulateTimePassage(ONE_DAY_SECONDS);
 
+    // Destake
     await program.methods
       .destake(new BN(0))
       .accounts({
@@ -409,7 +393,7 @@ describe("viridis_staking", () => {
       expectedSingleDayBaseReward + expectedSingleDayNftReward;
 
     expect(BigInt(userBalanceAfterDestake)).to.equal(
-      BigInt(expectedAnnualReward) + d_userTokens + BigInt(expectedDailyReward),
+      BigInt(expectedAnnualReward) + dUserTokens + BigInt(expectedDailyReward),
       "User balance after destake should equal the sum of expectedAnnualReward + d_userTokens + expectedDailyReward"
     );
 
@@ -419,16 +403,13 @@ describe("viridis_staking", () => {
     );
 
     expect(BigInt(vaultBalanceAfterDestake)).to.equal(
-      d_vaultTokens -
-        BigInt(expectedAnnualReward) -
-        BigInt(expectedDailyReward),
+      dVaultTokens - BigInt(expectedAnnualReward) - BigInt(expectedDailyReward),
       "Vault after destake should equal the sum of all paid rewards"
     );
 
     const stakeInfoAfterDestake = await program.account.stakeInfo.fetch(
       addresses.stakeInfo
     );
-
     const [stakeAfterDestake] = stakeInfoAfterDestake.stakes;
 
     expect(stakeAfterDestake.isDestaked).to.equal(
@@ -438,6 +419,7 @@ describe("viridis_staking", () => {
 
     const clockAfterDestake = await context.banksClient.getClock();
 
+    // Unlock NFT
     await program.methods
       .unlockNft(new BN(0))
       .accounts({
@@ -450,7 +432,6 @@ describe("viridis_staking", () => {
     const stakeInfoAfterNftUnlock = await program.account.stakeInfo.fetch(
       addresses.stakeInfo
     );
-
     const [stakeAfterNftUnlock] = stakeInfoAfterNftUnlock.stakes;
 
     expect(BigInt(stakeAfterNftUnlock.nftUnlockTime)).to.equal(

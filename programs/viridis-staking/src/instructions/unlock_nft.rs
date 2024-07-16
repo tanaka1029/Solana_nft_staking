@@ -74,20 +74,15 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
 
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
 
-    // Check if the stake has been destaked
     require!(stake_entry.is_destaked, ErrorCode::StakeNotDestaked);
 
-    // Check if there's an NFT locked
     require!(stake_entry.is_nft_locked(), ErrorCode::NoNftLocked);
 
-    // Verify that the provided NFT mint matches the locked NFT account
     require!(nft_lock_account.mint == mint.key(), ErrorCode::InvalidNftMint);
 
-    // Set the NFT unlock time
     let clock = Clock::get()?;
     stake_entry.nft_unlock_time = Some(clock.unix_timestamp);
 
-    // // Transfer the NFT back to the user
     transfer_tokens(
         nft_lock_account.to_account_info(),
         user_nft_account.to_account_info(),
