@@ -6,7 +6,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { BN, Program } from "@coral-xyz/anchor";
+import { BN, Program, IdlTypes, IdlAccounts } from "@coral-xyz/anchor";
 import { getKeypair } from "../utils";
 import {
   airdropSol,
@@ -55,6 +55,12 @@ describe("viridis_staking", () => {
       55, 139,
     ])
   );
+
+  type ProgramAccounts = IdlAccounts<ViridisStaking>;
+
+  type Config = ProgramAccounts["config"];
+  type StakeInfo = ProgramAccounts["stakeInfo"];
+  type StakeEntry = StakeInfo["stakes"][number];
 
   let context: ProgramTestContext;
   let provider: BankrunProvider;
@@ -290,6 +296,11 @@ describe("viridis_staking", () => {
       dUserTokens,
       "stake account should hold initial user balance"
     );
+
+    const expectedStakeAfterStaking: StakeEntry = {};
+
+    expect(stake).to.deep.equal({});
+
     expect(stake.baseApy).to.equal(
       config.baseApy,
       "stake base apy should equal config base apy"
