@@ -4,13 +4,14 @@ use anchor_lang::prelude::*;
 pub struct Config {
     pub admin: Pubkey,
     pub nft_collection: Pubkey,
+    pub max_nft_reward_lamports: u64,
     pub base_lock_days: u16,
     pub base_apy: u16,
 }
 
 impl Config {
     pub fn len() -> usize {
-        8 + 32 + 32 + 2 + 2
+        8 + 32 + 32 + 8 + 2 + 2
     }
 }
 

@@ -257,4 +257,25 @@ mod tests {
             2
         );
     }
+
+    #[test]
+    fn test_to_lamports() {
+        assert_eq!(to_lamports(1, 9).unwrap(), 1_000_000_000);
+
+        assert_eq!(to_lamports(0, 9).unwrap(), 0);
+
+        assert_eq!(to_lamports(1_000_000, 6).unwrap(), 1_000_000_000_000);
+
+        assert_eq!(to_lamports(u64::MAX, 0).unwrap(), u64::MAX);
+
+        assert_eq!(to_lamports(1, 8).unwrap(), 100_000_000);
+
+        assert!(to_lamports(u64::MAX, 1).is_err());
+
+        assert_eq!(to_lamports(1, 0).unwrap(), 1);
+
+        assert_eq!(to_lamports(5, 2).unwrap(), 500);
+
+        assert_eq!(to_lamports(123, 5).unwrap(), 12_300_000);
+    }
 }

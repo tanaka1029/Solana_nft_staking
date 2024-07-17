@@ -60,15 +60,14 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
         nft_lock_account,
         token_program,
         mint,
+        stake_info,
         ..
     } = ctx.accounts;
-    let stake_info = &mut ctx.accounts.stake_info;
-    let nft_collection = config.nft_collection;
 
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
     require!(
         metadata.collection.is_some() &&
-            metadata.collection.as_ref().unwrap().key == nft_collection,
+            metadata.collection.as_ref().unwrap().key == config.nft_collection,
         ErrorCode::InvalidCollection
     );
 

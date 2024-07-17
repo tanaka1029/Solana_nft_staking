@@ -34,6 +34,7 @@ describe("viridis_staking", () => {
   const APY_DECIMALS = 2;
   const DEFAULT_BASE_APY = 550;
   const DEFAULT_BASE_PERIOD = 14;
+  const DEFAULT_MAX_NFT_REWARD = 750_000;
   const DECIMALS = 9;
   const NFT_APY = { 30: 2950, 60: 5950, 90: 10450 };
   const ONE_DAY_SECONDS = 24 * 60 * 60;
@@ -389,8 +390,8 @@ describe("viridis_staking", () => {
 
     const expectedStakeAfterStaking: StakeEntry = {
       amount: new BN(dUserTokens),
-      baseApy: DEFAULT_BASE_APY,
-      stakeLockDays: DEFAULT_BASE_PERIOD,
+      baseApy: config.baseApy,
+      stakeLockDays: config.baseLockDays,
       nft: addresses.nft,
       nftApy: nftAPY,
       nftLockDays: nftLockPeriod,

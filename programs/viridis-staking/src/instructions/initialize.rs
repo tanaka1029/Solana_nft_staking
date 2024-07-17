@@ -3,6 +3,7 @@ use anchor_spl::metadata::Metadata;
 use anchor_spl::token::{ Mint, Token, TokenAccount };
 use crate::constants::*;
 use crate::state::Config;
+use crate::utils::to_lamports;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -10,7 +11,7 @@ pub struct Initialize<'info> {
     pub signer: Signer<'info>,
 
     #[account(init, seeds = [CONFIG_SEED], bump, payer = signer, space = Config::len())]
-    pub program_config: Account<'info, Config>,
+    pub config: Account<'info, Config>,
 
     #[account(
         init,
@@ -31,10 +32,11 @@ pub struct Initialize<'info> {
 }
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-    let config = &mut ctx.accounts.program_config;
+    let Initialize { config, signer, nft_collection, mint, .. } = ctx.accounts;
 
-    config.admin = ctx.accounts.signer.key();
-    config.nft_collection = ctx.accounts.nft_collection.key();
+    config.admin = signer.key();
+    config.nft_collection = nft_collection.key();
+    config.max_nft_reward_lamports = to_lamports(DEFAULT_MAX_NFT_REWARD, mint.decimals)?;
     config.base_lock_days = DEFAULT_STAKE_LOCK_DAYS;
     config.base_apy = DEFAULT_BASE_APY;
 
