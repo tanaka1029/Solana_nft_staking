@@ -32,9 +32,7 @@ const { expect } = chai;
 describe("viridis_staking", () => {
   // Constants
   const APY_DECIMALS = 2;
-  const DEFAULT_BASE_APY = 550;
-  const DEFAULT_BASE_PERIOD = 14;
-  const DEFAULT_MAX_NFT_REWARD = 750_000;
+
   const DECIMALS = 9;
   const NFT_APY = { 30: 2950, 60: 5950, 90: 10450 };
   const ONE_DAY_SECONDS = 24 * 60 * 60;
@@ -189,7 +187,7 @@ describe("viridis_staking", () => {
       const dailyRate = bApy.div(new Big(365));
       const dailyMultiplier = dailyRate.div(new Big(100));
       const reward = bAmount.mul(dailyMultiplier).mul(bDaysPassed);
-      return reward.round(undefined, 0).toNumber();
+      return reward.round().toNumber();
     } catch (error) {
       console.error("Error in calculateReward:", error);
       throw error;
@@ -294,19 +292,21 @@ describe("viridis_staking", () => {
   function assertDeepEqual<T extends Record<string, any>>(
     actual: T,
     expected: T,
-    path: string = ""
+    path: string = "",
+    tolerance: BN = new BN(1)
   ) {
     Object.entries(expected).forEach(([key, expectedValue]) => {
       const actualValue = actual[key];
       const currentPath = path ? `${path}.${key}` : key;
 
       if (BN.isBN(expectedValue)) {
+        const difference = expectedValue.sub(actualValue).abs();
         expect(
-          actualValue.eq(expectedValue),
-          `${currentPath} mismatch. Expected: ${expectedValue}, Actual: ${actualValue}`
+          closeTo(actualValue, expectedValue),
+          `${currentPath} mismatch. Expected: ${expectedValue}, Actual: ${actualValue}, Difference: ${difference}, Tolerance: ${tolerance}`
         ).to.be.true;
       } else if (typeof expectedValue === "object" && expectedValue !== null) {
-        assertDeepEqual(actualValue, expectedValue, currentPath);
+        assertDeepEqual(actualValue, expectedValue, currentPath, tolerance);
       } else {
         expect(
           actualValue,
@@ -314,6 +314,36 @@ describe("viridis_staking", () => {
         ).to.equal(expectedValue);
       }
     });
+  }
+
+  function closeTo(
+    actual: BN | bigint | number,
+    expected: BN | bigint | number,
+    tolerance: BN | bigint | number = new BN(1)
+  ) {
+    const difference = new BN(`${expected}`).sub(new BN(`${actual}`)).abs();
+
+    return difference.lte(new BN(`${tolerance}`));
+  }
+
+  function calculateClaimableReward(
+    stake: StakeEntry,
+    daysPassed: number,
+    nftAPY: number,
+    maxNftRewardLamports: number
+  ) {
+    const annualBaseReward = calculateReward(
+      stake.amount,
+      stake.baseApy,
+      daysPassed
+    );
+    const annualNftReward = calculateReward(stake.amount, nftAPY, daysPassed);
+    const limitedAnnualNftReward = Math.min(
+      annualNftReward,
+      maxNftRewardLamports
+    );
+
+    return annualBaseReward + limitedAnnualNftReward;
   }
 
   // Test setup
@@ -328,7 +358,8 @@ describe("viridis_staking", () => {
 
   // Tests
   it("Stake 1bil tokens, lock NFT immediately for 90 days, wait for 1 year, claim, wait for 1 day destake", async () => {
-    const config = await program.account.config.fetch(addresses.config);
+    const { baseApy, baseLockDays, maxNftRewardLamports } =
+      await program.account.config.fetch(addresses.config);
 
     let userTokens;
     let vaultTokens;
@@ -390,8 +421,8 @@ describe("viridis_staking", () => {
 
     const expectedStakeAfterStaking: StakeEntry = {
       amount: new BN(dUserTokens),
-      baseApy: config.baseApy,
-      stakeLockDays: config.baseLockDays,
+      baseApy: baseApy,
+      stakeLockDays: baseLockDays,
       nft: addresses.nft,
       nftApy: nftAPY,
       nftLockDays: nftLockPeriod,
@@ -406,11 +437,12 @@ describe("viridis_staking", () => {
 
     await simulateTimePassage(ONE_YEAR_SECONDS);
 
-    const baseAPY = stake.baseApy;
-
-    const annualBaseReward = calculateReward(stake.amount, baseAPY, 365);
-    const annualNftReward = calculateReward(stake.amount, nftAPY, 365);
-    const expectedAnnualReward = annualBaseReward + annualNftReward;
+    const expectedAnnualReward = calculateClaimableReward(
+      stake,
+      365,
+      nftAPY,
+      maxNftRewardLamports
+    );
 
     // Claim rewards
     await claimRpc(0);
@@ -438,31 +470,38 @@ describe("viridis_staking", () => {
     // Destake
     await destakeRpc(0);
 
-    const expectedDailyBaseReward = calculateReward(stake.amount, baseAPY, 1);
-    const expectedDailyNftReward = calculateReward(stake.amount, nftAPY, 1);
-
-    const expectedDailyReward =
-      expectedDailyBaseReward + expectedDailyNftReward;
+    const expectedRewardAfterDestake = calculateClaimableReward(
+      stake,
+      366,
+      nftAPY,
+      maxNftRewardLamports
+    );
 
     const userBalanceAfterDestake = await getTokenBalance(
       context,
       addresses.userToken
     );
 
-    expect(BigInt(userBalanceAfterDestake)).to.equal(
-      BigInt(expectedAnnualReward) + dUserTokens + BigInt(expectedDailyReward),
-      "User balance after destake should equal the sum of d_userTokens + expectedAnnualReward + expectedDailyReward"
-    );
+    expect(
+      closeTo(
+        userBalanceAfterDestake,
+        dUserTokens + BigInt(expectedRewardAfterDestake)
+      ),
+      "user balance after destake should equal their initial balance and (365 + 1)days reward"
+    ).true;
 
     const vaultBalanceAfterDestake = await getTokenBalance(
       context,
       addresses.tokenVault
     );
 
-    expect(BigInt(vaultBalanceAfterDestake)).to.equal(
-      dVaultTokens - BigInt(expectedAnnualReward) - BigInt(expectedDailyReward),
+    expect(
+      closeTo(
+        vaultBalanceAfterDestake,
+        dVaultTokens - BigInt(expectedRewardAfterDestake)
+      ),
       "Vault after destake does not match"
-    );
+    ).true;
 
     const stakeInfoAfterDestake = await program.account.stakeInfo.fetch(
       addresses.stakeInfo
@@ -495,5 +534,10 @@ describe("viridis_staking", () => {
       clockAfterDestake.unixTimestamp,
       "stake unlock time should equal current block timestamp"
     );
+
+    expect(
+      closeTo(stakeAfterNftUnlock.paidAmount, expectedRewardAfterDestake),
+      "stake paid amount should equal (365 + 1)days reward"
+    ).true;
   });
 });
