@@ -25,6 +25,7 @@ pub struct StakeEntry {
     pub start_time: i64,
     pub stake_lock_days: u16,
     pub base_apy: u16,
+    pub nft: Option<Pubkey>,
     pub nft_lock_time: Option<i64>,
     pub nft_lock_days: Option<u16>,
     pub nft_apy: Option<u16>,
@@ -40,6 +41,7 @@ impl StakeEntry {
             start_time,
             stake_lock_days,
             base_apy,
+            nft: None,
             nft_lock_time: None,
             nft_lock_days: None,
             nft_apy: None,
@@ -49,7 +51,8 @@ impl StakeEntry {
         }
     }
 
-    pub fn add_nft_info(&mut self, lock_time: i64, lock_days: u16, apy: u16) {
+    pub fn add_nft_info(&mut self, nft: Pubkey, lock_time: i64, lock_days: u16, apy: u16) {
+        self.nft = Some(nft);
         self.nft_lock_time = Some(lock_time);
         self.nft_lock_days = Some(lock_days);
         self.nft_apy = Some(apy);
@@ -60,6 +63,6 @@ impl StakeEntry {
     }
 
     pub fn is_nft_locked(&self) -> bool {
-        self.nft_lock_time.is_some() && self.nft_unlock_time.is_none()
+        self.nft.is_some() && self.nft_lock_time.is_some() && self.nft_unlock_time.is_none()
     }
 }

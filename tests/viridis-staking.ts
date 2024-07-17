@@ -68,6 +68,7 @@ describe("viridis_staking", () => {
     startTime: BN;
     stakeLockDays: number;
     baseApy: number;
+    nft: PublicKey | null;
     nftLockTime: BN | null;
     nftLockDays: number | null;
     nftApy: number | null;
@@ -328,15 +329,21 @@ describe("viridis_staking", () => {
   it("Stake 1bil tokens, lock NFT immediately for 90 days, wait for 1 year, claim, wait for 1 day destake", async () => {
     const config = await program.account.config.fetch(addresses.config);
 
-    const userTokens = 1_000_000_000;
-    const vaultTokens = 5_000_000_000;
+    let userTokens;
+    let vaultTokens;
+    let userNftCount;
+
+    await credit(
+      (userTokens = 1_000_000_000),
+      (vaultTokens = 5_000_000_000),
+      (userNftCount = 1)
+    );
+
+    const nftLockPeriod = 90;
+    const nftAPY = NFT_APY[nftLockPeriod];
+
     const dUserTokens = d(userTokens);
     const dVaultTokens = d(vaultTokens);
-    const userNftCount = 1;
-    const nftLockPeriod = 90;
-    const nftApy = NFT_APY[nftLockPeriod];
-
-    await credit(userTokens, vaultTokens, userNftCount);
 
     const instructions: TransactionInstruction[] = [
       await getInitializeStakeInfoInstruction(),
@@ -384,7 +391,8 @@ describe("viridis_staking", () => {
       amount: new BN(dUserTokens),
       baseApy: DEFAULT_BASE_APY,
       stakeLockDays: DEFAULT_BASE_PERIOD,
-      nftApy,
+      nft: addresses.nft,
+      nftApy: nftAPY,
       nftLockDays: nftLockPeriod,
       startTime: new BN(clockBeforeStaking.unixTimestamp),
       nftLockTime: stake.startTime,
@@ -398,13 +406,10 @@ describe("viridis_staking", () => {
     await simulateTimePassage(ONE_YEAR_SECONDS);
 
     const baseAPY = stake.baseApy;
-    const totalAPY = baseAPY + nftApy;
-    const yearInDays = 365;
-    const expectedAnnualReward = calculateReward(
-      stake.amount,
-      totalAPY,
-      yearInDays
-    );
+
+    const annualBaseReward = calculateReward(stake.amount, baseAPY, 365);
+    const annualNftReward = calculateReward(stake.amount, nftAPY, 365);
+    const expectedAnnualReward = annualBaseReward + annualNftReward;
 
     // Claim rewards
     await claimRpc(0);
@@ -412,7 +417,7 @@ describe("viridis_staking", () => {
     const userBalanceAfterClaim = await getBalance(addresses.userToken);
     expect(BigInt(expectedAnnualReward)).to.equal(
       userBalanceAfterClaim,
-      "User balance should have expected reward"
+      "user balance should have annual reward"
     );
 
     const stakeInfoAfterClaim = await program.account.stakeInfo.fetch(
@@ -432,16 +437,11 @@ describe("viridis_staking", () => {
     // Destake
     await destakeRpc(0);
 
-    const expectedSingleDayBaseReward = calculateReward(
-      stake.amount,
-      baseAPY,
-      1
-    );
-
-    const expectedSingleDayNftReward = calculateReward(stake.amount, nftApy, 1);
+    const expectedDailyBaseReward = calculateReward(stake.amount, baseAPY, 1);
+    const expectedDailyNftReward = calculateReward(stake.amount, nftAPY, 1);
 
     const expectedDailyReward =
-      expectedSingleDayBaseReward + expectedSingleDayNftReward;
+      expectedDailyBaseReward + expectedDailyNftReward;
 
     const userBalanceAfterDestake = await getTokenBalance(
       context,

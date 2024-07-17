@@ -63,6 +63,7 @@ pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64, lock_days: u16) -> Resu
         nft_lock_account,
         token_program,
         signer,
+        mint,
         ..
     } = ctx.accounts;
     let stake_info = &mut ctx.accounts.stake_info;
@@ -77,13 +78,13 @@ pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64, lock_days: u16) -> Resu
 
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
 
-    require!(stake_entry.nft_lock_time.is_none(), ErrorCode::NftAlreadyLocked);
+    require!(stake_entry.nft.is_none(), ErrorCode::NftAlreadyLocked);
 
     let lock_time = Clock::get()?.unix_timestamp;
 
     let apy = get_apy(lock_days)?;
 
-    stake_entry.add_nft_info(lock_time, lock_days, apy);
+    stake_entry.add_nft_info(mint.key(), lock_time, lock_days, apy);
 
     transfer_tokens(
         user_nft_account.to_account_info(),
