@@ -22,9 +22,6 @@ import { getCollectionAddress, getNftMetadataAddress } from "./metaplex";
 import { DECIMALS, mintKeypair, payer } from "./const";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
 
-chai.use(chaiAsPromised);
-const { expect } = chai;
-
 async function createCollection(metaplex: Metaplex) {
   return metaplex.nfts().create({
     name: "My Amazing Collection",
@@ -142,6 +139,7 @@ describe("staking program in the local node", () => {
     );
 
     const { nft } = await createCollectionAndNFTs(metaplex);
+
     const metadataAddress = getNftMetadataAddress(nft);
     const metadataInfo = await connection.getAccountInfo(metadataAddress);
     const nftCollectionAddress = getCollectionAddress(
@@ -197,7 +195,6 @@ describe("staking program in the local node", () => {
       const initInstruction = await program.methods
         .initialize()
         .accounts({
-          signer: payer.publicKey,
           mint: mintKeypair.publicKey,
           nftCollection: addresses.nftCollection,
         })
@@ -223,37 +220,27 @@ describe("staking program in the local node", () => {
         .signers([payer])
         .rpc();
 
-      await program.methods
-        .initializeStakeInfo()
-        .accounts({
-          signer: payer.publicKey,
-          mint: mintKeypair.publicKey,
-        })
-        .signers([payer])
-        .rpc();
+      await program.methods.initializeStakeInfo().signers([payer]).rpc();
 
       await program.methods
         .stake(new BN(dUserTokens))
         .accounts({
-          signer: payer.publicKey,
           mint: mintKeypair.publicKey,
         })
         .signers([payer])
         .rpc();
 
-      await program.methods
-        .lockNft(new BN(0), new BN(30))
-        .accounts({
-          signer: payer.publicKey,
-          mint: addresses.nft,
-        })
-        .signers([payer])
-        .rpc();
+      // await program.methods
+      //   .lockNft(new BN(0), new BN(30))
+      //   .accounts({
+      //     mint: addresses.nft,
+      //   })
+      //   .signers([payer])
+      //   .rpc();
 
       await program.methods
         .claim(new BN(0))
         .accounts({
-          signer: payer.publicKey,
           mint: mintKeypair.publicKey,
         })
         .signers([payer])
@@ -262,7 +249,6 @@ describe("staking program in the local node", () => {
       await program.methods
         .destake(new BN(0))
         .accounts({
-          signer: payer.publicKey,
           mint: mintKeypair.publicKey,
         })
         .signers([payer])

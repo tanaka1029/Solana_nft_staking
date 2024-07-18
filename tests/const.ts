@@ -1,4 +1,4 @@
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { getKeypair } from "../utils";
 
 export const APY_DECIMALS = 2;
@@ -9,6 +9,10 @@ export const ONE_DAY_SECONDS = 24 * 60 * 60;
 export const ONE_YEAR_SECONDS = ONE_DAY_SECONDS * 365;
 
 export const payer = getKeypair(".private/id.json");
+export const payerAddress = new PublicKey(
+  "H6B8Qo82EW2jK7HDgEj5EUwv5gq8TSMbGLkXfFmQhmJg"
+);
+
 export const mintKeypair = Keypair.fromSecretKey(
   new Uint8Array([
     104, 111, 227, 68, 80, 198, 10, 155, 242, 12, 3, 96, 88, 98, 2, 227, 159, 8,

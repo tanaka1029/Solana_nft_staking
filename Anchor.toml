@@ -3,7 +3,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-viridis_staking = "FnHTgNPMBPPQqk3WhCB9vkreh4qoQ3n6ns6EBoCFaxpF"
+viridis_staking = "4Y3DWRxpDUHfkKfEqX2joWtcTbR2kyd4wNv94jY3eHLv"
 
 [registry]
 url = "https://api.apr.dev"
@@ -22,4 +22,4 @@ url = "https://api.mainnet-beta.solana.com" # This is the url of the cluster tha
 
 [[test.genesis]]
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-program = "dumps/token_metadata_program.so"
+program = "dumps/metadata.so"

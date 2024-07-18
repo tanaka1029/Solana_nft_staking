@@ -11,7 +11,7 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-declare_id!("FnHTgNPMBPPQqk3WhCB9vkreh4qoQ3n6ns6EBoCFaxpF");
+declare_id!("4Y3DWRxpDUHfkKfEqX2joWtcTbR2kyd4wNv94jY3eHLv");
 
 #[program]
 pub mod viridis_staking {
