@@ -52,6 +52,7 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
     require!(!stake_entry.is_destaked, ErrorCode::AlreadyDestaked);
 
+    stake_entry.is_destaked = true;
     let current_time = Clock::get()?.unix_timestamp;
 
     let base_days_passed = calculate_days_passed(stake_entry.start_time, current_time);
@@ -69,8 +70,6 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         let nft_days_passed = calculate_days_passed(nft_lock_time, current_time);
         require!(nft_days_passed >= (nft_lock_days as i64), ErrorCode::NftLockPeriodNotEnded);
     }
-
-    stake_entry.is_destaked = true;
 
     let claimable_reward = calculate_claimable_reward(
         stake_entry,
@@ -91,14 +90,16 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         )?;
     }
 
-    transfer_tokens(
-        stake_account.to_account_info(),
-        user_token.to_account_info(),
-        stake_account.to_account_info(),
-        stake_entry.amount,
-        token_program.to_account_info(),
-        Some(&[&[TOKEN_SEED, ctx.accounts.signer.key.as_ref(), &[ctx.bumps.stake_account]]])
-    )?;
+    if !stake_entry.is_restaked {
+        transfer_tokens(
+            stake_account.to_account_info(),
+            user_token.to_account_info(),
+            stake_account.to_account_info(),
+            stake_entry.amount,
+            token_program.to_account_info(),
+            Some(&[&[TOKEN_SEED, ctx.accounts.signer.key.as_ref(), &[ctx.bumps.stake_account]]])
+        )?;
+    }
 
     Ok(())
 }

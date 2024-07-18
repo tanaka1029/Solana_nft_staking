@@ -35,3 +35,23 @@ export function getNftMetadataAddress(mint: PublicKey) {
     TOKEN_METADATA_PROGRAM_ID
   )[0];
 }
+
+export function getCollectionAddress(
+  metadataAddress: PublicKey,
+  metadataInfo: AccountInfo<Uint8Array | Buffer> | null
+) {
+  if (metadataInfo === null) {
+    throw new Error("Metadata info is null");
+  }
+
+  const metadata = deserializeMetaplexMetadata(metadataAddress, metadataInfo);
+
+  const nftCollection =
+    metadata.collection.__option === "Some" && metadata.collection.value
+      ? metadata.collection.value
+      : (() => {
+          throw new Error("NFT collection is missing or invalid");
+        })();
+
+  return new PublicKey(nftCollection.key);
+}

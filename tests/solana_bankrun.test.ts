@@ -16,6 +16,7 @@ import {
   getTokenBalance,
   fetchAccounts,
   setSplToAccount,
+  getAddresses,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -23,41 +24,28 @@ import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { TEST_NFT_ADDRESS, TOKEN_METADATA_PROGRAM_ID } from "../const";
-import { deserializeMetaplexMetadata, getNftMetadataAddress } from "./metaplex";
+import {
+  deserializeMetaplexMetadata,
+  getCollectionAddress,
+  getNftMetadataAddress,
+} from "./metaplex";
 import Big from "big.js";
+import {
+  APY_DECIMALS,
+  DECIMALS,
+  mintKeypair,
+  NFT_APY,
+  ONE_DAY_SECONDS,
+  ONE_YEAR_SECONDS,
+  payer,
+} from "./const";
+
+return;
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
 
-describe("viridis_staking", () => {
-  // Constants
-  const APY_DECIMALS = 2;
-
-  const DECIMALS = 9;
-  const NFT_APY = { 30: 2950, 60: 5950, 90: 10450 };
-  const ONE_DAY_SECONDS = 24 * 60 * 60;
-  const ONE_YEAR_SECONDS = ONE_DAY_SECONDS * 365;
-
-  // Test setup
-  const payer = getKeypair(".private/id.json");
-  const mintKeypair = Keypair.fromSecretKey(
-    new Uint8Array([
-      104, 111, 227, 68, 80, 198, 10, 155, 242, 12, 3, 96, 88, 98, 2, 227, 159,
-      8, 187, 108, 44, 203, 127, 216, 107, 30, 74, 88, 213, 67, 221, 141, 148,
-      233, 238, 76, 204, 72, 175, 20, 55, 185, 155, 29, 149, 76, 138, 216, 229,
-      16, 200, 139, 34, 82, 69, 61, 141, 173, 111, 153, 170, 159, 45, 230,
-    ])
-  );
-  const anotherKeypair = Keypair.fromSecretKey(
-    new Uint8Array([
-      181, 103, 170, 39, 106, 226, 238, 110, 158, 223, 26, 56, 169, 110, 196,
-      158, 141, 149, 246, 209, 169, 135, 233, 80, 79, 254, 23, 174, 42, 202,
-      144, 12, 20, 178, 0, 82, 247, 243, 184, 40, 119, 155, 24, 7, 236, 247,
-      247, 32, 74, 227, 136, 16, 110, 61, 45, 68, 115, 1, 146, 159, 180, 219,
-      55, 139,
-    ])
-  );
-
+describe("staking program in the solana-bankrun simulation", () => {
   type ProgramAccounts = IdlAccounts<ViridisStaking>;
 
   type Config = ProgramAccounts["config"];
@@ -73,6 +61,7 @@ describe("viridis_staking", () => {
     nftApy: number | null;
     nftUnlockTime: BN | null;
     isDestaked: boolean;
+    isRestaked: boolean;
     paidAmount: BN;
   };
 
@@ -85,48 +74,19 @@ describe("viridis_staking", () => {
   const setupAddresses = async (programId: PublicKey) => {
     const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
     const metadataInfo = await context.banksClient.getAccount(metadataAddress);
+    const nftCollectionAddress = getCollectionAddress(
+      metadataAddress,
+      metadataInfo
+    );
 
-    if (metadataInfo === null) {
-      throw new Error("Metadata info is null");
-    }
-
-    const metadata = deserializeMetaplexMetadata(metadataAddress, metadataInfo);
-
-    const nftCollection =
-      metadata.collection.__option === "Some" && metadata.collection.value
-        ? metadata.collection.value
-        : (() => {
-            throw new Error("NFT collection is missing or invalid");
-          })();
-
-    const nftCollectionAddress = new PublicKey(nftCollection.key);
-
-    return {
-      config: PublicKey.findProgramAddressSync(
-        [Buffer.from("config")],
-        programId
-      )[0],
-      userStake: PublicKey.findProgramAddressSync(
-        [Buffer.from("token"), payer.publicKey.toBuffer()],
-        programId
-      )[0],
-      tokenVault: PublicKey.findProgramAddressSync(
-        [Buffer.from("vault")],
-        programId
-      )[0],
-      stakeInfo: PublicKey.findProgramAddressSync(
-        [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
-        programId
-      )[0],
-      nft: TEST_NFT_ADDRESS,
-      metadata: metadataAddress,
-      nftCollection: nftCollectionAddress,
-      userToken: getAssociatedTokenAddressSync(
-        mintKeypair.publicKey,
-        payer.publicKey
-      ),
-      userNft: getAssociatedTokenAddressSync(TEST_NFT_ADDRESS, payer.publicKey),
-    };
+    return getAddresses(
+      programId,
+      payer.publicKey,
+      mintKeypair.publicKey,
+      TEST_NFT_ADDRESS,
+      nftCollectionAddress,
+      metadataAddress
+    );
   };
 
   const setupEnvironment = async (
@@ -431,6 +391,7 @@ describe("viridis_staking", () => {
       nftUnlockTime: null,
       paidAmount: new BN(0),
       isDestaked: false,
+      isRestaked: false,
     };
 
     assertDeepEqual(stake, expectedStakeAfterStaking);

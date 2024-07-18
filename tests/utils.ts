@@ -19,7 +19,8 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { BanksClient, ProgramTestContext } from "solana-bankrun";
-import { MAINNET_RPC } from "../const";
+import { MAINNET_RPC, TEST_NFT_ADDRESS } from "../const";
+import { getNftMetadataAddress } from "./metaplex";
 
 export async function createToken(
   banksClient: BanksClient,
@@ -168,3 +169,36 @@ async function fetchAccount(
     throw Error(`Cant find an account with address: ${address}`);
   }
 }
+
+export const getAddresses = (
+  programId: PublicKey,
+  payer: PublicKey,
+  mint: PublicKey,
+  nft: PublicKey,
+  nftCollection: PublicKey,
+  metadata: PublicKey
+) => {
+  return {
+    config: PublicKey.findProgramAddressSync(
+      [Buffer.from("config")],
+      programId
+    )[0],
+    userStake: PublicKey.findProgramAddressSync(
+      [Buffer.from("token"), payer.toBuffer()],
+      programId
+    )[0],
+    tokenVault: PublicKey.findProgramAddressSync(
+      [Buffer.from("vault")],
+      programId
+    )[0],
+    stakeInfo: PublicKey.findProgramAddressSync(
+      [Buffer.from("stake_info"), payer.toBuffer()],
+      programId
+    )[0],
+    nft,
+    metadata,
+    nftCollection,
+    userToken: getAssociatedTokenAddressSync(mint, payer),
+    userNft: getAssociatedTokenAddressSync(nft, payer),
+  };
+};
