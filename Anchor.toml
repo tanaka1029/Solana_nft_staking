@@ -15,8 +15,6 @@ wallet = "./.private/id.json"
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
-[test]
-startup_wait = 15000
 
 [test.validator]
 url = "https://api.mainnet-beta.solana.com" # This is the url of the cluster that accounts are cloned from (See `test.validator.clone`).
@@ -25,11 +23,3 @@ url = "https://api.mainnet-beta.solana.com" # This is the url of the cluster tha
 [[test.genesis]]
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 program = "dumps/token_metadata_program.so"
-
-# Clone the NFT mint account
-[[test.validator.clone]]
-address = "7FTdQdMqkk5Xc2oFsYR88BuJt2yyCPReTpqr3viH6b6C"
-
-# Clone the Metadata account
-[[test.validator.clone]]
-address = "4tSgNWeqtgp2kwRgjTqgpenP4wxfPaVCvganMR2gnd8W"

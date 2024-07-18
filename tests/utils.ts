@@ -21,6 +21,7 @@ import {
 import { BanksClient, ProgramTestContext } from "solana-bankrun";
 import { MAINNET_RPC, TEST_NFT_ADDRESS } from "../const";
 import { getNftMetadataAddress } from "./metaplex";
+import { DECIMALS } from "./const";
 
 export async function createToken(
   banksClient: BanksClient,
@@ -202,3 +203,5 @@ export const getAddresses = (
     userNft: getAssociatedTokenAddressSync(nft, payer),
   };
 };
+
+export const d = (amount: number): bigint => BigInt(amount * 10 ** DECIMALS);

@@ -1,48 +1,60 @@
-import { startAnchor, ProgramTestContext, Clock } from "solana-bankrun";
-import { BankrunProvider } from "anchor-bankrun";
 import {
   Connection,
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
   TransactionConfirmationStrategy,
-  TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
+  SendOptions,
 } from "@solana/web3.js";
-import { Program, IdlAccounts, BN, workspace } from "@coral-xyz/anchor";
-import { getKeypair } from "../utils";
+import { BN, Program, workspace } from "@coral-xyz/anchor";
 import {
-  airdropSol,
-  createTokenAccountAndCredit,
-  createToken,
-  getTokenBalance,
-  fetchAccounts,
-  setSplToAccount,
-  getAddresses,
-} from "./utils";
+  createMint,
+  mintTo,
+  getOrCreateAssociatedTokenAccount,
+} from "@solana/spl-token";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ViridisStaking } from "../target/types/viridis_staking";
-import IDL from "../target/idl/viridis_staking.json";
-import {
-  createMint,
-  getAccount,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
-import { TEST_NFT_ADDRESS, TOKEN_METADATA_PROGRAM_ID } from "../const";
-import {
-  deserializeMetaplexMetadata,
-  getCollectionAddress,
-  getNftMetadataAddress,
-} from "./metaplex";
-import Big from "big.js";
+import { d, getAddresses } from "./utils";
+import { getCollectionAddress, getNftMetadataAddress } from "./metaplex";
 import { DECIMALS, mintKeypair, payer } from "./const";
+import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
 
-export async function airdrop(
+async function createCollection(metaplex: Metaplex) {
+  return metaplex.nfts().create({
+    name: "My Amazing Collection",
+    uri: "https://example.com/my-collection-metadata.json",
+    sellerFeeBasisPoints: 0,
+    isCollection: true,
+  });
+}
+async function createNft(metaplex: Metaplex, collectionAddress: PublicKey) {
+  return metaplex.nfts().create({
+    name: `NFT`,
+    uri: `https://example.com/nft-metadata.json`,
+    sellerFeeBasisPoints: 0,
+    collection: collectionAddress,
+    collectionAuthority: payer,
+    tokenOwner: payer.publicKey,
+  });
+}
+
+async function createCollectionAndNFTs(metaplex: Metaplex) {
+  const collectionOutput = await createCollection(metaplex);
+  const nftOutput = await createNft(metaplex, collectionOutput.nft.address);
+
+  return {
+    collection: collectionOutput.nft.address,
+    nft: nftOutput.nft.address,
+  };
+}
+
+async function airdrop(
   pubkey: PublicKey,
   amount: number,
   connection: Connection
@@ -53,65 +65,214 @@ export async function airdrop(
   );
 
   await connection.confirmTransaction(
-    {
-      signature: airdropSignature,
-    } as TransactionConfirmationStrategy,
+    { signature: airdropSignature } as TransactionConfirmationStrategy,
     "confirmed"
   );
 }
 
-export async function createSplToken(
-  signer: Keypair,
-  mintKeypair: Keypair,
-  decimals: number,
-  connection: Connection
+async function sendAndConfirmVersionedTransaction(
+  connection: Connection,
+  transaction: VersionedTransaction,
+  signers: Keypair[]
 ) {
-  return createMint(
-    connection,
-    signer,
-    signer.publicKey,
-    signer.publicKey,
-    decimals,
-    mintKeypair
-  );
+  transaction.sign(signers);
+
+  const sendOptions: SendOptions = {
+    skipPreflight: false,
+    preflightCommitment: "confirmed",
+  };
+
+  const signature = await connection.sendTransaction(transaction, sendOptions);
+  console.log("Transaction sent. Signature:", signature);
+
+  const latestBlockhash = await connection.getLatestBlockhash();
+  const confirmation = await connection.confirmTransaction({
+    signature,
+    ...latestBlockhash,
+  });
+
+  if (confirmation.value.err) {
+    throw new Error(`Transaction failed: ${confirmation.value.err.toString()}`);
+  }
+
+  console.log("Transaction confirmed");
+  return signature;
+}
+
+async function createAndSendVersionedTransaction(
+  connection: Connection,
+  payer: Keypair,
+  instructions: any[],
+  signers: Keypair[]
+) {
+  const latestBlockhash = await connection.getLatestBlockhash();
+  const messageV0 = new TransactionMessage({
+    payerKey: payer.publicKey,
+    recentBlockhash: latestBlockhash.blockhash,
+    instructions,
+  }).compileToV0Message();
+
+  const transaction = new VersionedTransaction(messageV0);
+  return sendAndConfirmVersionedTransaction(connection, transaction, signers);
 }
 
 describe("staking program in the local node", () => {
-  before(async () => {});
-  beforeEach(async () => {});
+  let connection: Connection;
+  let program: Program<ViridisStaking>;
+  let metaplex: Metaplex;
+  let addresses: Awaited<ReturnType<typeof getAddresses>>;
+  let payerTokenAccount: PublicKey;
 
-  it("should run all instructions on a node to make sure there are no memory issues", async () => {
-    const program = workspace.ViridisStaking as Program<ViridisStaking>;
-    const connection = program.provider.connection;
+  before(async () => {
+    connection = new Connection("http://localhost:8899", "confirmed");
+    program = workspace.ViridisStaking as Program<ViridisStaking>;
+    metaplex = Metaplex.make(connection).use(keypairIdentity(payer));
+  });
+
+  beforeEach(async () => {
     await airdrop(payer.publicKey, 5, connection);
-    await createSplToken(payer, mintKeypair, DECIMALS, connection);
-    const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
-    const metadataInfo = await program.provider.connection.getAccountInfo(
-      metadataAddress
+
+    await createMint(
+      connection,
+      payer,
+      payer.publicKey,
+      payer.publicKey,
+      DECIMALS,
+      mintKeypair
     );
 
+    const { nft } = await createCollectionAndNFTs(metaplex);
+    const metadataAddress = getNftMetadataAddress(nft);
+    const metadataInfo = await connection.getAccountInfo(metadataAddress);
     const nftCollectionAddress = getCollectionAddress(
       metadataAddress,
       metadataInfo
     );
 
-    const addresses: Awaited<ReturnType<typeof getAddresses>> = getAddresses(
+    addresses = getAddresses(
       program.programId,
       payer.publicKey,
       mintKeypair.publicKey,
-      TEST_NFT_ADDRESS,
+      nft,
       nftCollectionAddress,
       metadataAddress
     );
 
-    await program.methods
-      .initialize()
-      .accounts({
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey,
-        nftCollection: addresses.nftCollection,
-      })
-      .signers([payer])
-      .rpc();
+    const payerTokenAccountInfo = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer,
+      mintKeypair.publicKey,
+      payer.publicKey
+    );
+    payerTokenAccount = payerTokenAccountInfo.address;
+  });
+
+  async function credit(dUserTokens: bigint, dVaultTokens: bigint) {
+    await mintTo(
+      connection,
+      payer,
+      mintKeypair.publicKey,
+      addresses.tokenVault,
+      payer,
+      dVaultTokens
+    );
+
+    await mintTo(
+      connection,
+      payer,
+      mintKeypair.publicKey,
+      payerTokenAccount,
+      payer,
+      dUserTokens
+    );
+  }
+
+  it("should run all instructions on a node to make sure there are no memory issues", async () => {
+    const userTokens = 1_000_000;
+    const vaultTokens = 10_000_000;
+    const dUserTokens = d(userTokens);
+    const dVaultTokens = d(vaultTokens);
+
+    try {
+      const initInstruction = await program.methods
+        .initialize()
+        .accounts({
+          signer: payer.publicKey,
+          mint: mintKeypair.publicKey,
+          nftCollection: addresses.nftCollection,
+        })
+        .signers([payer])
+        .instruction();
+
+      await createAndSendVersionedTransaction(
+        connection,
+        payer,
+        [initInstruction],
+        [payer]
+      );
+
+      await credit(dUserTokens, dVaultTokens);
+
+      await program.methods
+        .updateConfig({
+          admin: null,
+          baseLockDays: new BN(0),
+          baseApy: null,
+          maxNftRewardLamports: null,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .initializeStakeInfo()
+        .accounts({
+          signer: payer.publicKey,
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .stake(new BN(dUserTokens))
+        .accounts({
+          signer: payer.publicKey,
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .lockNft(new BN(0), new BN(30))
+        .accounts({
+          signer: payer.publicKey,
+          mint: addresses.nft,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .claim(new BN(0))
+        .accounts({
+          signer: payer.publicKey,
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .destake(new BN(0))
+        .accounts({
+          signer: payer.publicKey,
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+    } catch (error: any) {
+      console.error("Detailed error:", error);
+      if (error.logs) {
+        console.error("Program logs:", error.logs);
+      }
+      throw error;
+    }
   });
 });

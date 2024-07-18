@@ -7,6 +7,7 @@ pub struct UpdateConfigArgs {
     pub admin: Option<Pubkey>,
     pub base_lock_days: Option<u16>,
     pub base_apy: Option<u16>,
+    pub max_nft_reward_lamports: Option<u64>,
 }
 
 #[derive(Accounts)]
@@ -40,6 +41,10 @@ pub fn update_config(ctx: Context<UpdateConfig>, args: UpdateConfigArgs) -> Resu
 
     if let Some(base_apy) = args.base_apy {
         config.base_apy = base_apy;
+    }
+
+    if let Some(max_nft_reward_lamports) = args.max_nft_reward_lamports {
+        config.max_nft_reward_lamports = max_nft_reward_lamports;
     }
 
     Ok(())

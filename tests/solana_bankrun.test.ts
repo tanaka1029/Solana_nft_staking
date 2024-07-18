@@ -17,6 +17,7 @@ import {
   fetchAccounts,
   setSplToAccount,
   getAddresses,
+  d,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -211,8 +212,6 @@ describe("staking program in the solana-bankrun simulation", () => {
   async function getBalance(address: PublicKey) {
     return getTokenBalance(context, address);
   }
-
-  const d = (amount: number): bigint => BigInt(amount * 10 ** DECIMALS);
 
   const credit = async (
     tokenAmount: number | bigint,
