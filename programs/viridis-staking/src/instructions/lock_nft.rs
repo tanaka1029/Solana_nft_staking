@@ -24,8 +24,8 @@ pub struct LockNft<'info> {
     pub stake_info: Account<'info, StakeInfo>,
 
     #[account(
-        init_if_needed,
-        seeds = [NFT_SEED, signer.key().as_ref(), &stake_index.to_le_bytes()],
+        init,
+        seeds = [NFT_SEED],
         bump,
         payer = signer,
         token::mint = mint,

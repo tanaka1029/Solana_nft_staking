@@ -487,7 +487,7 @@ describe("viridis_staking", () => {
         userBalanceAfterDestake,
         dUserTokens + BigInt(expectedRewardAfterDestake)
       ),
-      "user balance after destake should equal their initial balance and (365 + 1)days reward"
+      "user balance after destake should equal their initial balance and (365 + 1) days reward"
     ).true;
 
     const vaultBalanceAfterDestake = await getTokenBalance(
@@ -537,7 +537,7 @@ describe("viridis_staking", () => {
 
     expect(
       closeTo(stakeAfterNftUnlock.paidAmount, expectedRewardAfterDestake),
-      "stake paid amount should equal (365 + 1)days reward"
+      "stake paid amount should equal (365 + 1) days reward"
     ).true;
   });
 });
