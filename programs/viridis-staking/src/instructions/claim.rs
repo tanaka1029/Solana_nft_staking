@@ -28,16 +28,13 @@ pub struct Claim<'info> {
 
     pub mint: Account<'info, Mint>,
 
-    #[account(seeds = [CONFIG_SEED], bump)]
-    pub config: Account<'info, Config>,
-
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn claim(ctx: Context<Claim>, stake_index: u64) -> Result<()> {
-    let Claim { config, token_program, stake_info, token_vault, user_token, .. } = ctx.accounts;
+    let Claim { token_program, stake_info, token_vault, user_token, .. } = ctx.accounts;
 
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
 
@@ -46,11 +43,7 @@ pub fn claim(ctx: Context<Claim>, stake_index: u64) -> Result<()> {
 
     let current_time = Clock::get()?.unix_timestamp;
 
-    let claimable_reward = calculate_claimable_reward(
-        stake_entry,
-        config.max_nft_reward_lamports,
-        current_time
-    )?;
+    let claimable_reward = calculate_claimable_reward(stake_entry, current_time)?;
 
     if claimable_reward > 0 {
         stake_entry.add_payment(claimable_reward);

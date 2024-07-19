@@ -6,6 +6,7 @@ use crate::constants::CONFIG_SEED;
 pub struct UpdateConfigArgs {
     pub admin: Option<Pubkey>,
     pub base_lock_days: Option<u16>,
+    pub max_nft_apy_duration_days: Option<u16>,
     pub base_apy: Option<u16>,
     pub max_nft_reward_lamports: Option<u64>,
 }
@@ -45,6 +46,10 @@ pub fn update_config(ctx: Context<UpdateConfig>, args: UpdateConfigArgs) -> Resu
 
     if let Some(max_nft_reward_lamports) = args.max_nft_reward_lamports {
         config.max_nft_reward_lamports = max_nft_reward_lamports;
+    }
+
+    if let Some(max_nft_apy_duration_days) = args.max_nft_apy_duration_days {
+        config.max_nft_apy_duration_days = max_nft_apy_duration_days;
     }
 
     Ok(())

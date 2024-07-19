@@ -216,6 +216,7 @@ describe("staking program in the local node", () => {
           baseLockDays: new BN(0),
           baseApy: null,
           maxNftRewardLamports: null,
+          maxNftApyDurationDays: null,
         })
         .signers([payer])
         .rpc();

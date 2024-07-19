@@ -5,11 +5,7 @@ use crate::{ constants::APY_DECIMALS, error::ErrorCode };
 use crate::constants::DEFAULT_NFT_DAYS_APY;
 use anchor_spl::token::{ transfer, Transfer };
 
-pub fn calculate_claimable_reward(
-    stake_entry: &StakeEntry,
-    max_nft_reward_lamports: u64,
-    current_time: i64
-) -> Result<u64> {
+pub fn calculate_claimable_reward(stake_entry: &StakeEntry, current_time: i64) -> Result<u64> {
     let StakeEntry { amount, base_apy, start_time, nft_lock_time, nft_apy, paid_amount, .. } =
         *stake_entry;
 
@@ -22,7 +18,7 @@ pub fn calculate_claimable_reward(
         let nft_days = calculate_days_passed(nft_lock_time, current_time);
         let nft_reward = calculate_reward(amount, nft_apy, nft_days as u64)
             .ok_or(ErrorCode::RewardCalculationFailed)?
-            .min(max_nft_reward_lamports);
+            .min(stake_entry.max_nft_reward_lamports);
 
         total_reward = total_reward.saturating_add(nft_reward);
     }

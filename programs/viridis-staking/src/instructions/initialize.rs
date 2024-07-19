@@ -36,9 +36,10 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
 
     config.admin = signer.key();
     config.nft_collection = nft_collection.key();
-    config.max_nft_reward_lamports = to_lamports(DEFAULT_MAX_NFT_REWARD, mint.decimals)?;
-    config.base_lock_days = DEFAULT_STAKE_LOCK_DAYS;
-    config.base_apy = DEFAULT_BASE_APY;
+    config.max_nft_reward_lamports = to_lamports(MAX_NFT_REWARD, mint.decimals)?;
+    config.max_nft_apy_duration_days = MAX_NFT_APY_DURATION_DAYS;
+    config.base_lock_days = STAKE_LOCK_DAYS;
+    config.base_apy = BASE_APY;
 
     Ok(())
 }

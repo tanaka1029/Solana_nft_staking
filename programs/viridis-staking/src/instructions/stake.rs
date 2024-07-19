@@ -53,7 +53,14 @@ pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
     let stake_info = &mut ctx.accounts.stake_info;
     let config = &mut ctx.accounts.config;
     let start_time = Clock::get()?.unix_timestamp;
-    let new_stake = StakeEntry::new(amount, start_time, config.base_lock_days, config.base_apy);
+    let new_stake = StakeEntry::new(
+        amount,
+        start_time,
+        config.base_lock_days,
+        config.base_apy,
+        config.max_nft_reward_lamports,
+        config.max_nft_apy_duration_days
+    );
 
     resize_account(
         stake_info,

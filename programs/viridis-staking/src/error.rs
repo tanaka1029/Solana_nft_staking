@@ -37,4 +37,5 @@ pub enum ErrorCode {
     #[msg("No NFT is locked in this stake")]
     NoNftLocked,
     InvalidNftMint,
+    ExceedsMaxLockDuration,
 }

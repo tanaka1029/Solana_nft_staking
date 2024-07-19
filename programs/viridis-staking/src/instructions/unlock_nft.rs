@@ -25,7 +25,7 @@ pub struct UnlockNft<'info> {
 
     #[account(
         mut,
-        seeds = [NFT_SEED],
+        seeds = [NFT_SEED, mint.key().as_ref()],
         bump,
     )]
     pub nft_lock_account: Account<'info, TokenAccount>,
@@ -86,7 +86,7 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
         nft_lock_account.to_account_info(),
         1,
         token_program.to_account_info(),
-        Some(&[&[NFT_SEED, &[ctx.bumps.nft_lock_account]]])
+        Some(&[&[NFT_SEED, ctx.accounts.mint.key().as_ref(), &[ctx.bumps.nft_lock_account]]])
     )?;
 
     Ok(())

@@ -35,16 +35,13 @@ pub struct Destake<'info> {
 
     pub mint: Account<'info, Mint>,
 
-    #[account(seeds = [CONFIG_SEED], bump)]
-    pub config: Account<'info, Config>,
-
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
-    let Destake { config, token_program, stake_info, token_vault, user_token, stake_account, .. } =
+    let Destake { token_program, stake_info, token_vault, user_token, stake_account, .. } =
         ctx.accounts;
 
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
@@ -71,11 +68,7 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         require!(nft_days_passed >= (nft_lock_days as i64), ErrorCode::NftLockPeriodNotEnded);
     }
 
-    let claimable_reward = calculate_claimable_reward(
-        stake_entry,
-        config.max_nft_reward_lamports,
-        current_time
-    )?;
+    let claimable_reward = calculate_claimable_reward(stake_entry, current_time)?;
 
     if claimable_reward > 0 {
         stake_entry.add_payment(claimable_reward);

@@ -315,8 +315,12 @@ describe("staking program in the solana-bankrun simulation", () => {
 
   // Tests
   it("Stake 1bil tokens, lock NFT immediately for 90 days, wait for 1 year, claim, wait for 1 day destake", async () => {
-    const { baseApy, baseLockDays, maxNftRewardLamports } =
-      await program.account.config.fetch(addresses.config);
+    const {
+      baseApy,
+      baseLockDays,
+      maxNftRewardLamports,
+      maxNftApyDurationDays,
+    } = await program.account.config.fetch(addresses.config);
 
     let userTokens;
     let vaultTokens;
@@ -378,7 +382,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const expectedStakeAfterStaking: StakeEntry = {
       amount: new BN(dUserTokens),
-      baseApy: baseApy,
+      baseApy,
       stakeLockDays: baseLockDays,
       nft: addresses.nft,
       nftApy: nftAPY,
