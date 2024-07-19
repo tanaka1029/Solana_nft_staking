@@ -230,13 +230,13 @@ describe("staking program in the local node", () => {
         .signers([payer])
         .rpc();
 
-      // await program.methods
-      //   .lockNft(new BN(0), new BN(30))
-      //   .accounts({
-      //     mint: addresses.nft,
-      //   })
-      //   .signers([payer])
-      //   .rpc();
+      await program.methods
+        .lockNft(new BN(0), new BN(30))
+        .accounts({
+          mint: addresses.nft,
+        })
+        .signers([payer])
+        .rpc();
 
       await program.methods
         .claim(new BN(0))
@@ -246,13 +246,13 @@ describe("staking program in the local node", () => {
         .signers([payer])
         .rpc();
 
-      await program.methods
-        .destake(new BN(0))
-        .accounts({
-          mint: mintKeypair.publicKey,
-        })
-        .signers([payer])
-        .rpc();
+      // await program.methods
+      //   .destake(new BN(0))
+      //   .accounts({
+      //     mint: mintKeypair.publicKey,
+      //   })
+      //   .signers([payer])
+      //   .rpc();
     } catch (error: any) {
       console.error("Detailed error:", error);
       if (error.logs) {

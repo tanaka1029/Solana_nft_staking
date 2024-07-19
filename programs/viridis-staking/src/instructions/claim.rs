@@ -42,7 +42,7 @@ pub fn claim(ctx: Context<Claim>, stake_index: u64) -> Result<()> {
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
 
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
-    require!(!stake_entry.is_destaked, ErrorCode::AlreadyDestaked);
+    require!(stake_entry.destake_time.is_none(), ErrorCode::AlreadyDestaked);
 
     let current_time = Clock::get()?.unix_timestamp;
 

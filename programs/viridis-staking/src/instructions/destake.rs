@@ -50,10 +50,10 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
 
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
-    require!(!stake_entry.is_destaked, ErrorCode::AlreadyDestaked);
+    require!(stake_entry.destake_time.is_none(), ErrorCode::AlreadyDestaked);
 
-    stake_entry.is_destaked = true;
     let current_time = Clock::get()?.unix_timestamp;
+    stake_entry.destake_time = Some(current_time);
 
     let base_days_passed = calculate_days_passed(stake_entry.start_time, current_time);
     require!(
@@ -90,7 +90,7 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         )?;
     }
 
-    if !stake_entry.is_restaked {
+    if stake_entry.restake_time.is_none() {
         transfer_tokens(
             stake_account.to_account_info(),
             user_token.to_account_info(),

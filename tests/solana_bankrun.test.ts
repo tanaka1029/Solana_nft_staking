@@ -41,8 +41,6 @@ import {
   payer,
 } from "./const";
 
-return;
-
 chai.use(chaiAsPromised);
 const { expect } = chai;
 
@@ -61,8 +59,8 @@ describe("staking program in the solana-bankrun simulation", () => {
     nftLockDays: number | null;
     nftApy: number | null;
     nftUnlockTime: BN | null;
-    isDestaked: boolean;
-    isRestaked: boolean;
+    restakeTime: BN | null;
+    destakeTime: BN | null;
     paidAmount: BN;
   };
 
@@ -389,8 +387,8 @@ describe("staking program in the solana-bankrun simulation", () => {
       nftLockTime: stake.startTime,
       nftUnlockTime: null,
       paidAmount: new BN(0),
-      isDestaked: false,
-      isRestaked: false,
+      restakeTime: null,
+      destakeTime: null,
     };
 
     assertDeepEqual(stake, expectedStakeAfterStaking);
@@ -426,6 +424,8 @@ describe("staking program in the solana-bankrun simulation", () => {
     assertDeepEqual(stakeAfterClaim, expectedStakeAfterClaim);
 
     await simulateTimePassage(ONE_DAY_SECONDS);
+
+    const clockBeforeDestake = await context.banksClient.getClock();
 
     // Destake
     await destakeRpc(0);
@@ -468,8 +468,8 @@ describe("staking program in the solana-bankrun simulation", () => {
     );
     const [stakeAfterDestake] = stakeInfoAfterDestake.stakes;
 
-    expect(stakeAfterDestake.isDestaked).to.equal(
-      true,
+    expect(BigInt(stakeAfterDestake.destakeTime)).to.equal(
+      clockBeforeDestake.unixTimestamp,
       "stake should have destaked status"
     );
 

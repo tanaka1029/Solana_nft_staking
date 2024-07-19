@@ -75,7 +75,7 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
 
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
 
-    require!(stake_entry.is_destaked, ErrorCode::StakeNotDestaked);
+    require!(stake_entry.destake_time.is_some(), ErrorCode::StakeNotDestaked);
 
     let clock = Clock::get()?;
     stake_entry.nft_unlock_time = Some(clock.unix_timestamp);

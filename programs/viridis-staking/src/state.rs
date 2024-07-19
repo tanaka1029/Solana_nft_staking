@@ -31,8 +31,8 @@ pub struct StakeEntry {
     pub nft_lock_days: Option<u16>,
     pub nft_apy: Option<u16>,
     pub nft_unlock_time: Option<i64>,
-    pub is_destaked: bool,
-    pub is_restaked: bool,
+    pub destake_time: Option<i64>,
+    pub restake_time: Option<i64>,
     pub parent_stake_index: Option<u64>,
     pub paid_amount: u64,
 }
@@ -49,8 +49,8 @@ impl StakeEntry {
             nft_lock_days: None,
             nft_apy: None,
             nft_unlock_time: None,
-            is_destaked: false,
-            is_restaked: false,
+            destake_time: None,
+            restake_time: None,
             parent_stake_index: None,
             paid_amount: 0,
         }
