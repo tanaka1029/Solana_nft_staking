@@ -4,7 +4,7 @@ use anchor_spl::{
     metadata::{ Metadata, MetadataAccount },
     token::{ Mint, Token, TokenAccount },
 };
-use crate::utils::transfer_tokens;
+use crate::utils::{ calculate_days_passed, transfer_tokens };
 use crate::{ constants::*, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
@@ -29,6 +29,13 @@ pub struct UnlockNft<'info> {
         bump,
     )]
     pub nft_lock_account: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [NFT_INFO_SEED, mint.key().as_ref()],
+        bump
+    )]
+    pub nft_info: Box<Account<'info, NftInfo>>,
 
     #[account(
         mut,
@@ -60,6 +67,7 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
         config,
         metadata,
         user_nft_account,
+        nft_info,
         nft_lock_account,
         token_program,
         stake_info,
@@ -75,7 +83,11 @@ pub fn unlock_nft(ctx: Context<UnlockNft>, stake_index: u64) -> Result<()> {
 
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
 
-    require!(stake_entry.destake_time.is_some(), ErrorCode::StakeNotDestaked);
+    let destake_time = stake_entry.destake_time.ok_or(ErrorCode::StakeNotDestaked)?;
+    let nft_lock_time = stake_entry.nft_lock_time.ok_or(ErrorCode::NoNftLocked)?;
+
+    let nft_lock_days = calculate_days_passed(nft_lock_time, destake_time);
+    nft_info.add_days(nft_lock_days as u16);
 
     let clock = Clock::get()?;
     stake_entry.nft_unlock_time = Some(clock.unix_timestamp);

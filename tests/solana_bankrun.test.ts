@@ -40,6 +40,7 @@ import {
   ONE_YEAR_SECONDS,
   payer,
 } from "./const";
+import { config } from "process";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -287,14 +288,22 @@ describe("staking program in the solana-bankrun simulation", () => {
     stake: StakeEntry,
     daysPassed: number,
     nftAPY: number,
-    maxNftRewardLamports: number
+    maxNftRewardLamports: number,
+    maxNftApyDays: number
   ) {
     const annualBaseReward = calculateReward(
       stake.amount,
       stake.baseApy,
       daysPassed
     );
-    const annualNftReward = calculateReward(stake.amount, nftAPY, daysPassed);
+
+    const nftEffectiveDays = Math.min(daysPassed, maxNftApyDays);
+    const annualNftReward = calculateReward(
+      stake.amount,
+      nftAPY,
+      nftEffectiveDays
+    );
+
     const limitedAnnualNftReward = Math.min(
       annualNftReward,
       maxNftRewardLamports
@@ -327,7 +336,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     let userNftCount;
 
     await credit(
-      (userTokens = 1_000_000_000),
+      (userTokens = 1_000_000),
       (vaultTokens = 5_000_000_000),
       (userNftCount = 1)
     );
@@ -403,7 +412,8 @@ describe("staking program in the solana-bankrun simulation", () => {
       stake,
       365,
       nftAPY,
-      maxNftRewardLamports
+      maxNftRewardLamports,
+      maxNftApyDurationDays
     );
 
     // Claim rewards
@@ -438,7 +448,8 @@ describe("staking program in the solana-bankrun simulation", () => {
       stake,
       366,
       nftAPY,
-      maxNftRewardLamports
+      maxNftRewardLamports,
+      maxNftApyDurationDays
     );
 
     const userBalanceAfterDestake = await getTokenBalance(
@@ -493,6 +504,10 @@ describe("staking program in the solana-bankrun simulation", () => {
       addresses.stakeInfo
     );
     const [stakeAfterNftUnlock] = stakeInfoAfterNftUnlock.stakes;
+
+    const nftInfo = await program.account.nftInfo.fetch(addresses.nftInfo);
+
+    console.log(nftInfo);
 
     expect(BigInt(stakeAfterNftUnlock.nftUnlockTime)).to.equal(
       clockAfterDestake.unixTimestamp,

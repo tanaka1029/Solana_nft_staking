@@ -65,6 +65,7 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         )
     {
         let nft_days_passed = calculate_days_passed(nft_lock_time, current_time);
+
         require!(nft_days_passed >= (nft_lock_days as i64), ErrorCode::NftLockPeriodNotEnded);
     }
 

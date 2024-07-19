@@ -196,6 +196,10 @@ export const getAddresses = (
       [Buffer.from("stake_info"), payer.toBuffer()],
       programId
     )[0],
+    nftInfo: PublicKey.findProgramAddressSync(
+      [Buffer.from("nft_info"), nft.toBuffer()],
+      programId
+    )[0],
     nft,
     metadata,
     nftCollection,

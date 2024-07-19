@@ -16,7 +16,8 @@ pub fn calculate_claimable_reward(stake_entry: &StakeEntry, current_time: i64) -
 
     if let (Some(nft_lock_time), Some(nft_apy)) = (nft_lock_time, nft_apy) {
         let nft_days = calculate_days_passed(nft_lock_time, current_time);
-        let nft_reward = calculate_reward(amount, nft_apy, nft_days as u64)
+        let nft_effective_days = nft_days.min(stake_entry.max_nft_apy_duration_days as i64);
+        let nft_reward = calculate_reward(amount, nft_apy, nft_effective_days as u64)
             .ok_or(ErrorCode::RewardCalculationFailed)?
             .min(stake_entry.max_nft_reward_lamports);
 
