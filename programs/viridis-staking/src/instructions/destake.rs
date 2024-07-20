@@ -84,16 +84,14 @@ pub fn destake(ctx: Context<Destake>, stake_index: u64) -> Result<()> {
         )?;
     }
 
-    if stake_entry.restake_time.is_none() {
-        transfer_tokens(
-            stake_account.to_account_info(),
-            user_token.to_account_info(),
-            stake_account.to_account_info(),
-            stake_entry.amount,
-            token_program.to_account_info(),
-            Some(&[&[TOKEN_SEED, ctx.accounts.signer.key.as_ref(), &[ctx.bumps.stake_account]]])
-        )?;
-    }
+    transfer_tokens(
+        stake_account.to_account_info(),
+        user_token.to_account_info(),
+        stake_account.to_account_info(),
+        stake_entry.amount,
+        token_program.to_account_info(),
+        Some(&[&[TOKEN_SEED, ctx.accounts.signer.key.as_ref(), &[ctx.bumps.stake_account]]])
+    )?;
 
     Ok(())
 }

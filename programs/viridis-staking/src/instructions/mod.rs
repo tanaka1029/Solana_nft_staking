@@ -10,6 +10,9 @@ pub use initialize_stake_info::*;
 mod stake;
 pub use stake::*;
 
+mod restake;
+pub use restake::*;
+
 mod lock_nft;
 pub use lock_nft::*;
 

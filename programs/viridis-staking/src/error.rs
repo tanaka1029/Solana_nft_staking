@@ -38,4 +38,5 @@ pub enum ErrorCode {
     NoNftLocked,
     InvalidNftMint,
     ExceedsMaxLockDuration,
+    AlreadyRestaked,
 }

@@ -34,7 +34,7 @@ pub struct StakeEntry {
     pub nft_unlock_time: Option<i64>,
     pub destake_time: Option<i64>,
     pub restake_time: Option<i64>,
-    pub parent_stake_index: Option<u64>,
+    pub parent_stake_index: Option<u16>,
     pub paid_amount: u64,
     pub max_nft_reward_lamports: u64,
     pub max_nft_apy_duration_days: u16,
@@ -47,7 +47,8 @@ impl StakeEntry {
         stake_lock_days: u16,
         base_apy: u16,
         max_nft_reward_lamports: u64,
-        max_nft_apy_duration_days: u16
+        max_nft_apy_duration_days: u16,
+        parent_stake_index: Option<u16>
     ) -> Self {
         Self {
             amount,
@@ -61,7 +62,7 @@ impl StakeEntry {
             nft_unlock_time: None,
             destake_time: None,
             restake_time: None,
-            parent_stake_index: None,
+            parent_stake_index,
             paid_amount: 0,
             max_nft_reward_lamports,
             max_nft_apy_duration_days,

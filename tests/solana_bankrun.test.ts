@@ -507,7 +507,10 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const nftInfo = await program.account.nftInfo.fetch(addresses.nftInfo);
 
-    console.log(nftInfo);
+    expect(nftInfo.daysLocked).to.equal(
+      366,
+      "nft info should have right amount of locked days"
+    );
 
     expect(BigInt(stakeAfterNftUnlock.nftUnlockTime)).to.equal(
       clockAfterDestake.unixTimestamp,
