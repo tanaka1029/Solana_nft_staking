@@ -23,31 +23,11 @@ pub struct Restake<'info> {
     )]
     pub stake_info: Account<'info, StakeInfo>,
 
-    #[account(
-        init_if_needed,
-        seeds = [TOKEN_SEED, signer.key().as_ref()],
-        bump,
-        payer = signer,
-        token::mint = mint,
-        token::authority = stake_account
-    )]
-    pub stake_account: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = signer
-    )]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    pub mint: Account<'info, Mint>,
-
     pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
-pub fn restake(ctx: Context<Restake>, stake_index: u16) -> Result<()> {
+pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
     let Restake { config, stake_info, .. } = ctx.accounts;
 
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);

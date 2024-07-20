@@ -224,7 +224,31 @@ describe("staking program in the local node", () => {
       await program.methods.initializeStakeInfo().signers([payer]).rpc();
 
       await program.methods
-        .stake(new BN(dUserTokens))
+        .stake(new BN(dUserTokens / 4n))
+        .accounts({
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .stake(new BN(dUserTokens / 4n))
+        .accounts({
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .stake(new BN(dUserTokens / 4n))
+        .accounts({
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .stake(new BN(dUserTokens / 4n))
         .accounts({
           mint: mintKeypair.publicKey,
         })
@@ -241,6 +265,14 @@ describe("staking program in the local node", () => {
 
       await program.methods
         .claim(new BN(0))
+        .accounts({
+          mint: mintKeypair.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+
+      await program.methods
+        .restake(new BN(0))
         .accounts({
           mint: mintKeypair.publicKey,
         })

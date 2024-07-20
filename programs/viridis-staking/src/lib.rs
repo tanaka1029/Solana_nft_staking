@@ -33,7 +33,7 @@ pub mod viridis_staking {
         instructions::stake(ctx, amount)
     }
 
-    pub fn restake(ctx: Context<Restake>, stake_index: u16) -> Result<()> {
+    pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
         instructions::restake(ctx, stake_index)
     }
 
