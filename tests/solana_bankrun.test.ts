@@ -1,6 +1,7 @@
 import { startAnchor, ProgramTestContext, Clock } from "solana-bankrun";
 import { BankrunProvider } from "anchor-bankrun";
 import {
+  AccountInfo,
   Keypair,
   PublicKey,
   TransactionInstruction,
@@ -8,31 +9,25 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import { Program, IdlAccounts, BN } from "@coral-xyz/anchor";
-import { getKeypair } from "../utils";
 import {
   airdropSol,
   createTokenAccountAndCredit,
   createToken,
   getTokenBalance,
-  fetchAccounts,
   setSplToAccount,
-  getAddresses,
   d,
+  assertDeepEqual,
+  closeTo,
+  simulateTimePassage,
+  calculateClaimableReward,
+  getSeedAccounts,
+  setupAddresses,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { TEST_NFT_ADDRESS, TOKEN_METADATA_PROGRAM_ID } from "../const";
 import {
-  deserializeMetaplexMetadata,
-  getCollectionAddress,
-  getNftMetadataAddress,
-} from "./metaplex";
-import Big from "big.js";
-import {
-  APY_DECIMALS,
   DECIMALS,
   mintKeypair,
   NFT_APY,
@@ -40,7 +35,7 @@ import {
   ONE_YEAR_SECONDS,
   payer,
 } from "./const";
-import { config } from "process";
+import { StakeEntry } from "./types";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -50,44 +45,15 @@ describe("staking program in the solana-bankrun simulation", () => {
 
   type Config = ProgramAccounts["config"];
   type StakeInfo = ProgramAccounts["stakeInfo"];
-  type StakeEntry = {
-    amount: BN;
-    startTime: BN;
-    stakeLockDays: number;
-    baseApy: number;
-    nft: PublicKey | null;
-    nftLockTime: BN | null;
-    nftLockDays: number | null;
-    nftApy: number | null;
-    nftUnlockTime: BN | null;
-    restakeTime: BN | null;
-    destakeTime: BN | null;
-    paidAmount: BN;
-  };
 
   let context: ProgramTestContext;
   let provider: BankrunProvider;
   let program: Program<ViridisStaking>;
   let addresses: Awaited<ReturnType<typeof setupAddresses>>;
-
-  // Helper functions
-  const setupAddresses = async (programId: PublicKey) => {
-    const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
-    const metadataInfo = await context.banksClient.getAccount(metadataAddress);
-    const nftCollectionAddress = getCollectionAddress(
-      metadataAddress,
-      metadataInfo
-    );
-
-    return getAddresses(
-      programId,
-      payer.publicKey,
-      mintKeypair.publicKey,
-      TEST_NFT_ADDRESS,
-      nftCollectionAddress,
-      metadataAddress
-    );
-  };
+  let seedAccounts: {
+    address: PublicKey;
+    info: AccountInfo<Buffer>;
+  }[];
 
   const setupEnvironment = async (
     context: ProgramTestContext,
@@ -106,53 +72,20 @@ describe("staking program in the solana-bankrun simulation", () => {
       .rpc();
   };
 
-  const getSeedAccounts = async () => {
-    const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
-    return fetchAccounts([
-      TOKEN_METADATA_PROGRAM_ID,
-      TEST_NFT_ADDRESS,
-      metadataAddress,
-    ]);
-  };
-
-  // Function to simulate time passage
-  async function simulateTimePassage(
-    secondsToAdd: number
-  ): Promise<[currentClock: Clock, futureTimestamp: bigint]> {
-    const currentClock = await context.banksClient.getClock();
-    const newTimestamp = currentClock.unixTimestamp + BigInt(secondsToAdd);
-
-    const newClock = new Clock(
-      currentClock.slot,
-      currentClock.epochStartTimestamp,
-      currentClock.epoch,
-      currentClock.leaderScheduleEpoch,
-      newTimestamp
+  async function fetchStakes() {
+    const stakeInfo = await program.account.stakeInfo.fetch(
+      addresses.stakeInfo
     );
-
-    context.setClock(newClock);
-
-    return [currentClock, newTimestamp];
+    return stakeInfo.stakes;
   }
 
-  const calculateReward = (
-    amount: number,
-    apy: number,
-    daysPassed: number
-  ): number => {
-    try {
-      const bAmount = new Big(amount);
-      const bApy = new Big(apy).div(Big(10).pow(APY_DECIMALS));
-      const bDaysPassed = new Big(daysPassed);
-      const dailyRate = bApy.div(new Big(365));
-      const dailyMultiplier = dailyRate.div(new Big(100));
-      const reward = bAmount.mul(dailyMultiplier).mul(bDaysPassed);
-      return reward.round().toNumber();
-    } catch (error) {
-      console.error("Error in calculateReward:", error);
-      throw error;
-    }
-  };
+  async function fetchNftInfo() {
+    return program.account.nftInfo.fetch(addresses.nftInfo);
+  }
+
+  async function fetchConfig() {
+    return await program.account.config.fetch(addresses.config);
+  }
 
   const getStakeTokenInstruction = async (amountDecimals: bigint) => {
     return program.methods
@@ -173,6 +106,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       })
       .instruction();
   };
+
   const getLockNftInstruction = async (
     stakeIndex: number,
     lockPeriod: number
@@ -247,78 +181,20 @@ describe("staking program in the solana-bankrun simulation", () => {
     }
   };
 
-  function assertDeepEqual<T extends Record<string, any>>(
-    actual: T,
-    expected: T,
-    path: string = "",
-    tolerance: BN = new BN(1)
-  ) {
-    Object.entries(expected).forEach(([key, expectedValue]) => {
-      const actualValue = actual[key];
-      const currentPath = path ? `${path}.${key}` : key;
-
-      if (BN.isBN(expectedValue)) {
-        const difference = expectedValue.sub(actualValue).abs();
-        expect(
-          closeTo(actualValue, expectedValue),
-          `${currentPath} mismatch. Expected: ${expectedValue}, Actual: ${actualValue}, Difference: ${difference}, Tolerance: ${tolerance}`
-        ).to.be.true;
-      } else if (typeof expectedValue === "object" && expectedValue !== null) {
-        assertDeepEqual(actualValue, expectedValue, currentPath, tolerance);
-      } else {
-        expect(
-          actualValue,
-          `${currentPath} mismatch. Expected: ${expectedValue}, Actual: ${actualValue}`
-        ).to.equal(expectedValue);
-      }
-    });
-  }
-
-  function closeTo(
-    actual: BN | bigint | number,
-    expected: BN | bigint | number,
-    tolerance: BN | bigint | number = new BN(1)
-  ) {
-    const difference = new BN(`${expected}`).sub(new BN(`${actual}`)).abs();
-
-    return difference.lte(new BN(`${tolerance}`));
-  }
-
-  function calculateClaimableReward(
-    stake: StakeEntry,
-    daysPassed: number,
-    nftAPY: number,
-    maxNftRewardLamports: number,
-    maxNftApyDays: number
-  ) {
-    const annualBaseReward = calculateReward(
-      stake.amount,
-      stake.baseApy,
-      daysPassed
-    );
-
-    const nftEffectiveDays = Math.min(daysPassed, maxNftApyDays);
-    const annualNftReward = calculateReward(
-      stake.amount,
-      nftAPY,
-      nftEffectiveDays
-    );
-
-    const limitedAnnualNftReward = Math.min(
-      annualNftReward,
-      maxNftRewardLamports
-    );
-
-    return annualBaseReward + limitedAnnualNftReward;
-  }
-
-  // Test setup
   beforeEach(async () => {
-    const seedAccounts = await getSeedAccounts();
+    seedAccounts = await getSeedAccounts();
+  });
+
+  beforeEach(async () => {
     context = await startAnchor("", [], seedAccounts);
     provider = new BankrunProvider(context);
     program = new Program<ViridisStaking>(IDL as ViridisStaking, provider);
-    addresses = await setupAddresses(program.programId);
+    addresses = await setupAddresses(
+      program.programId,
+      context,
+      payer.publicKey,
+      mintKeypair.publicKey
+    );
     await setupEnvironment(context, program);
   });
 
@@ -329,17 +205,13 @@ describe("staking program in the solana-bankrun simulation", () => {
       baseLockDays,
       maxNftRewardLamports,
       maxNftApyDurationDays,
-    } = await program.account.config.fetch(addresses.config);
+    } = await fetchConfig();
 
-    let userTokens;
-    let vaultTokens;
-    let userNftCount;
+    let userTokens = 1_000_000;
+    let vaultTokens = 5_000_000_000;
+    let userNftCount = 1;
 
-    await credit(
-      (userTokens = 1_000_000),
-      (vaultTokens = 5_000_000_000),
-      (userNftCount = 1)
-    );
+    await credit(userTokens, vaultTokens, userNftCount);
 
     const nftLockPeriod = 90;
     const nftAPY = NFT_APY[nftLockPeriod];
@@ -366,15 +238,11 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     await context.banksClient.processTransaction(tx);
 
-    const stakeInfo = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
-    const [stake] = stakeInfo.stakes;
+    const [stake] = await fetchStakes();
 
     const userBalanceAfterStaking = await getBalance(addresses.userToken);
     const userStakeBalance = await getBalance(addresses.userStake);
 
-    // Assertions for initial staking
     expect(userBalanceAfterStaking).to.equal(
       0n,
       "updated user balance after staking should equal 0"
@@ -391,22 +259,25 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const expectedStakeAfterStaking: StakeEntry = {
       amount: new BN(dUserTokens),
-      baseApy,
-      stakeLockDays: baseLockDays,
-      nft: addresses.nft,
-      nftApy: nftAPY,
-      nftLockDays: nftLockPeriod,
       startTime: new BN(clockBeforeStaking.unixTimestamp),
+      stakeLockDays: baseLockDays,
+      baseApy,
+      nft: addresses.nft,
       nftLockTime: stake.startTime,
+      nftLockDays: nftLockPeriod,
+      nftApy: nftAPY,
       nftUnlockTime: null,
-      paidAmount: new BN(0),
-      restakeTime: null,
       destakeTime: null,
+      restakeTime: null,
+      parentStakeIndex: null,
+      paidAmount: new BN(0),
+      maxNftApyDurationDays: maxNftApyDurationDays,
+      maxNftRewardLamports: maxNftRewardLamports,
     };
 
     assertDeepEqual(stake, expectedStakeAfterStaking);
 
-    await simulateTimePassage(ONE_YEAR_SECONDS);
+    await simulateTimePassage(ONE_YEAR_SECONDS, context);
 
     const expectedAnnualReward = calculateClaimableReward(
       stake,
@@ -416,7 +287,6 @@ describe("staking program in the solana-bankrun simulation", () => {
       maxNftApyDurationDays
     );
 
-    // Claim rewards
     await claimRpc(0);
 
     const userBalanceAfterClaim = await getBalance(addresses.userToken);
@@ -425,10 +295,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       "user balance should have annual reward"
     );
 
-    const stakeInfoAfterClaim = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
-    const [stakeAfterClaim] = stakeInfoAfterClaim.stakes;
+    const [stakeAfterClaim] = await fetchStakes();
 
     const expectedStakeAfterClaim: StakeEntry = {
       ...expectedStakeAfterStaking,
@@ -437,11 +304,10 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     assertDeepEqual(stakeAfterClaim, expectedStakeAfterClaim);
 
-    await simulateTimePassage(ONE_DAY_SECONDS);
+    await simulateTimePassage(ONE_DAY_SECONDS, context);
 
     const clockBeforeDestake = await context.banksClient.getClock();
 
-    // Destake
     await destakeRpc(0);
 
     const expectedRewardAfterDestake = calculateClaimableReward(
@@ -452,10 +318,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       maxNftApyDurationDays
     );
 
-    const userBalanceAfterDestake = await getTokenBalance(
-      context,
-      addresses.userToken
-    );
+    const userBalanceAfterDestake = await getBalance(addresses.userToken);
 
     expect(
       closeTo(
@@ -465,10 +328,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       "user balance after destake should equal their initial balance and (365 + 1) days reward"
     ).true;
 
-    const vaultBalanceAfterDestake = await getTokenBalance(
-      context,
-      addresses.tokenVault
-    );
+    const vaultBalanceAfterDestake = await getBalance(addresses.tokenVault);
 
     expect(
       closeTo(
@@ -478,10 +338,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       "Vault after destake does not match"
     ).true;
 
-    const stakeInfoAfterDestake = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
-    const [stakeAfterDestake] = stakeInfoAfterDestake.stakes;
+    const [stakeAfterDestake] = await fetchStakes();
 
     expect(BigInt(stakeAfterDestake.destakeTime)).to.equal(
       clockBeforeDestake.unixTimestamp,
@@ -490,7 +347,6 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const clockAfterDestake = await context.banksClient.getClock();
 
-    // Unlock NFT
     await program.methods
       .unlockNft(new BN(0))
       .accounts({
@@ -500,12 +356,8 @@ describe("staking program in the solana-bankrun simulation", () => {
       .signers([payer])
       .rpc();
 
-    const stakeInfoAfterNftUnlock = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
-    const [stakeAfterNftUnlock] = stakeInfoAfterNftUnlock.stakes;
-
-    const nftInfo = await program.account.nftInfo.fetch(addresses.nftInfo);
+    const [stakeAfterNftUnlock] = await fetchStakes();
+    const nftInfo = await fetchNftInfo();
 
     expect(nftInfo.daysLocked).to.equal(
       366,

@@ -18,10 +18,21 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import { BanksClient, ProgramTestContext } from "solana-bankrun";
-import { MAINNET_RPC, TEST_NFT_ADDRESS } from "../const";
-import { getNftMetadataAddress } from "./metaplex";
-import { DECIMALS } from "./const";
+import { BanksClient, ProgramTestContext, Clock } from "solana-bankrun";
+import {
+  MAINNET_RPC,
+  TEST_NFT_ADDRESS,
+  TOKEN_METADATA_PROGRAM_ID,
+} from "../const";
+import { getCollectionAddress, getNftMetadataAddress } from "./metaplex";
+import { APY_DECIMALS, DECIMALS } from "./const";
+import { BN } from "@coral-xyz/anchor";
+
+import chai from "chai";
+import Big from "big.js";
+import { StakeEntry } from "./types";
+
+const { expect } = chai;
 
 export async function createToken(
   banksClient: BanksClient,
@@ -209,3 +220,139 @@ export const getAddresses = (
 };
 
 export const d = (amount: number): bigint => BigInt(amount * 10 ** DECIMALS);
+
+export function assertDeepEqual<T extends Record<string, any>>(
+  actual: T,
+  expected: T,
+  path: string = "",
+  tolerance: BN = new BN(1)
+) {
+  Object.entries(expected).forEach(([key, expectedValue]) => {
+    const actualValue = actual[key];
+    const currentPath = path ? `${path}.${key}` : key;
+
+    if (BN.isBN(expectedValue)) {
+      const difference = expectedValue.sub(actualValue).abs();
+      expect(
+        closeTo(actualValue, expectedValue),
+        `${currentPath} mismatch. Expected: ${expectedValue}, Actual: ${actualValue}, Difference: ${difference}, Tolerance: ${tolerance}`
+      ).to.be.true;
+    } else if (typeof expectedValue === "object" && expectedValue !== null) {
+      assertDeepEqual(actualValue, expectedValue, currentPath, tolerance);
+    } else {
+      expect(
+        actualValue,
+        `${currentPath} mismatch. Expected: ${expectedValue}, Actual: ${actualValue}`
+      ).to.equal(expectedValue);
+    }
+  });
+}
+
+export function closeTo(
+  actual: BN | bigint | number,
+  expected: BN | bigint | number,
+  tolerance: BN | bigint | number = new BN(1)
+) {
+  const difference = new BN(`${expected}`).sub(new BN(`${actual}`)).abs();
+
+  return difference.lte(new BN(`${tolerance}`));
+}
+
+export async function simulateTimePassage(
+  secondsToAdd: number,
+  context: ProgramTestContext
+): Promise<[currentClock: Clock, futureTimestamp: bigint]> {
+  const currentClock = await context.banksClient.getClock();
+  const newTimestamp = currentClock.unixTimestamp + BigInt(secondsToAdd);
+
+  const newClock = new Clock(
+    currentClock.slot,
+    currentClock.epochStartTimestamp,
+    currentClock.epoch,
+    currentClock.leaderScheduleEpoch,
+    newTimestamp
+  );
+
+  context.setClock(newClock);
+
+  return [currentClock, newTimestamp];
+}
+
+export function calculateClaimableReward(
+  stake: StakeEntry,
+  daysPassed: number,
+  nftAPY: number,
+  maxNftRewardLamports: number,
+  maxNftApyDays: number
+) {
+  const annualBaseReward = calculateReward(
+    stake.amount,
+    stake.baseApy,
+    daysPassed
+  );
+
+  const nftEffectiveDays = Math.min(daysPassed, maxNftApyDays);
+  const annualNftReward = calculateReward(
+    stake.amount,
+    nftAPY,
+    nftEffectiveDays
+  );
+
+  const limitedAnnualNftReward = Math.min(
+    annualNftReward,
+    maxNftRewardLamports
+  );
+
+  return annualBaseReward + limitedAnnualNftReward;
+}
+
+const calculateReward = (
+  amount: number,
+  apy: number,
+  daysPassed: number
+): number => {
+  try {
+    const bAmount = new Big(amount);
+    const bApy = new Big(apy).div(Big(10).pow(APY_DECIMALS));
+    const bDaysPassed = new Big(daysPassed);
+    const dailyRate = bApy.div(new Big(365));
+    const dailyMultiplier = dailyRate.div(new Big(100));
+    const reward = bAmount.mul(dailyMultiplier).mul(bDaysPassed);
+    return reward.round().toNumber();
+  } catch (error) {
+    console.error("Error in calculateReward:", error);
+    throw error;
+  }
+};
+
+export const getSeedAccounts = async () => {
+  const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
+  return fetchAccounts([
+    TOKEN_METADATA_PROGRAM_ID,
+    TEST_NFT_ADDRESS,
+    metadataAddress,
+  ]);
+};
+
+export const setupAddresses = async (
+  programId: PublicKey,
+  context: ProgramTestContext,
+  payer: PublicKey,
+  mint: PublicKey
+) => {
+  const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
+  const metadataInfo = await context.banksClient.getAccount(metadataAddress);
+  const nftCollectionAddress = getCollectionAddress(
+    metadataAddress,
+    metadataInfo
+  );
+
+  return getAddresses(
+    programId,
+    payer,
+    mint,
+    TEST_NFT_ADDRESS,
+    nftCollectionAddress,
+    metadataAddress
+  );
+};
