@@ -22,6 +22,7 @@ import { BanksClient, ProgramTestContext, Clock } from "solana-bankrun";
 import {
   MAINNET_RPC,
   TEST_NFT_ADDRESS,
+  TEST_NFT_ADDRESS_WRONG_COLLECTION,
   TOKEN_METADATA_PROGRAM_ID,
 } from "../const";
 import { getCollectionAddress, getNftMetadataAddress } from "./metaplex";
@@ -339,11 +340,12 @@ const calculateReward = (
 };
 
 export const getSeedAccounts = async () => {
-  const metadataAddress = getNftMetadataAddress(TEST_NFT_ADDRESS);
   return fetchAccounts([
     TOKEN_METADATA_PROGRAM_ID,
+    TEST_NFT_ADDRESS_WRONG_COLLECTION,
     TEST_NFT_ADDRESS,
-    metadataAddress,
+    getNftMetadataAddress(TEST_NFT_ADDRESS),
+    getNftMetadataAddress(TEST_NFT_ADDRESS_WRONG_COLLECTION),
   ]);
 };
 

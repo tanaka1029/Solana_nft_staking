@@ -36,7 +36,10 @@ pub enum ErrorCode {
     StakeNotDestaked,
     #[msg("No NFT is locked in this stake")]
     NoNftLocked,
+    #[msg("Invalid NFT mint")]
     InvalidNftMint,
+    #[msg("Exceeds maximum lock duration")]
     ExceedsMaxLockDuration,
+    #[msg("Already restaked")]
     AlreadyRestaked,
 }

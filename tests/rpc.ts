@@ -36,7 +36,7 @@ export const lockNftRpc = async (
     .rpc();
 };
 
-const restakeRpc = async (
+export const restakeRpc = async (
   stakeIndex: number,
   signer: Keypair,
   mint: PublicKey,

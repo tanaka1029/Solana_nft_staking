@@ -11,3 +11,7 @@ export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
 export const TEST_NFT_ADDRESS = new PublicKey(
   "7FTdQdMqkk5Xc2oFsYR88BuJt2yyCPReTpqr3viH6b6C"
 );
+
+export const TEST_NFT_ADDRESS_WRONG_COLLECTION = new PublicKey(
+  "213WoxA2j1vX6SGERSXE1DYFng3wPLWWLJDbCqjUBXCu"
+);
