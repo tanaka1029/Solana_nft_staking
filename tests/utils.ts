@@ -214,10 +214,17 @@ export const getAddresses = (
     nft,
     metadata,
     nftCollection,
+    getStakeInfo: (address: PublicKey) => getStakeInfo(address, programId),
     userToken: getAssociatedTokenAddressSync(mint, payer),
     userNft: getAssociatedTokenAddressSync(nft, payer),
   };
 };
+
+export const getStakeInfo = (address: PublicKey, programId: PublicKey) =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from("stake_info"), address.toBuffer()],
+    programId
+  )[0];
 
 export const d = (amount: number): bigint => BigInt(amount * 10 ** DECIMALS);
 
@@ -362,3 +369,17 @@ export const setupAddresses = async (
     metadataAddress
   );
 };
+
+export async function expectErrorWitLog(
+  promise: Promise<any>,
+  errorMessage: string
+) {
+  await expect(promise)
+    .to.be.rejectedWith()
+    .then((e) => {
+      expect(
+        e.logs.some((log: string) => log.includes(errorMessage)),
+        errorMessage
+      ).to.be.true;
+    });
+}

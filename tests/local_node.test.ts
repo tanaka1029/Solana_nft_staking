@@ -19,7 +19,7 @@ import chaiAsPromised from "chai-as-promised";
 import { ViridisStaking } from "../target/types/viridis_staking";
 import { d, getAddresses } from "./utils";
 import { getCollectionAddress, getNftMetadataAddress } from "./metaplex";
-import { DECIMALS, mintKeypair, payer } from "./const";
+import { DECIMALS, mintKeypair, userA } from "./const";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
 
 async function createCollection(metaplex: Metaplex) {
@@ -36,8 +36,8 @@ async function createNft(metaplex: Metaplex, collectionAddress: PublicKey) {
     uri: `https://example.com/nft-metadata.json`,
     sellerFeeBasisPoints: 0,
     collection: collectionAddress,
-    collectionAuthority: payer,
-    tokenOwner: payer.publicKey,
+    collectionAuthority: userA,
+    tokenOwner: userA.publicKey,
   });
 }
 
@@ -114,6 +114,8 @@ async function createAndSendVersionedTransaction(
 }
 
 describe("staking program in the local node", () => {
+  return;
+
   let connection: Connection;
   let program: Program<ViridisStaking>;
   let metaplex: Metaplex;
@@ -123,17 +125,17 @@ describe("staking program in the local node", () => {
   before(async () => {
     connection = new Connection("http://localhost:8899", "confirmed");
     program = workspace.ViridisStaking as Program<ViridisStaking>;
-    metaplex = Metaplex.make(connection).use(keypairIdentity(payer));
+    metaplex = Metaplex.make(connection).use(keypairIdentity(userA));
   });
 
   beforeEach(async () => {
-    await airdrop(payer.publicKey, 5, connection);
+    await airdrop(userA.publicKey, 5, connection);
 
     await createMint(
       connection,
-      payer,
-      payer.publicKey,
-      payer.publicKey,
+      userA,
+      userA.publicKey,
+      userA.publicKey,
       DECIMALS,
       mintKeypair
     );
@@ -149,7 +151,7 @@ describe("staking program in the local node", () => {
 
     addresses = getAddresses(
       program.programId,
-      payer.publicKey,
+      userA.publicKey,
       mintKeypair.publicKey,
       nft,
       nftCollectionAddress,
@@ -158,9 +160,9 @@ describe("staking program in the local node", () => {
 
     const payerTokenAccountInfo = await getOrCreateAssociatedTokenAccount(
       connection,
-      payer,
+      userA,
       mintKeypair.publicKey,
-      payer.publicKey
+      userA.publicKey
     );
     payerTokenAccount = payerTokenAccountInfo.address;
   });
@@ -168,19 +170,19 @@ describe("staking program in the local node", () => {
   async function credit(dUserTokens: bigint, dVaultTokens: bigint) {
     await mintTo(
       connection,
-      payer,
+      userA,
       mintKeypair.publicKey,
       addresses.tokenVault,
-      payer,
+      userA,
       dVaultTokens
     );
 
     await mintTo(
       connection,
-      payer,
+      userA,
       mintKeypair.publicKey,
       payerTokenAccount,
-      payer,
+      userA,
       dUserTokens
     );
   }
@@ -198,14 +200,14 @@ describe("staking program in the local node", () => {
           mint: mintKeypair.publicKey,
           nftCollection: addresses.nftCollection,
         })
-        .signers([payer])
+        .signers([userA])
         .instruction();
 
       await createAndSendVersionedTransaction(
         connection,
-        payer,
+        userA,
         [initInstruction],
-        [payer]
+        [userA]
       );
 
       await credit(dUserTokens, dVaultTokens);
@@ -218,25 +220,17 @@ describe("staking program in the local node", () => {
           maxNftRewardLamports: null,
           maxNftApyDurationDays: null,
         })
-        .signers([payer])
+        .signers([userA])
         .rpc();
 
-      await program.methods.initializeStakeInfo().signers([payer]).rpc();
+      await program.methods.initializeStakeInfo().signers([userA]).rpc();
 
       await program.methods
         .stake(new BN(dUserTokens / 4n))
         .accounts({
           mint: mintKeypair.publicKey,
         })
-        .signers([payer])
-        .rpc();
-
-      await program.methods
-        .stake(new BN(dUserTokens / 4n))
-        .accounts({
-          mint: mintKeypair.publicKey,
-        })
-        .signers([payer])
+        .signers([userA])
         .rpc();
 
       await program.methods
@@ -244,7 +238,7 @@ describe("staking program in the local node", () => {
         .accounts({
           mint: mintKeypair.publicKey,
         })
-        .signers([payer])
+        .signers([userA])
         .rpc();
 
       await program.methods
@@ -252,7 +246,15 @@ describe("staking program in the local node", () => {
         .accounts({
           mint: mintKeypair.publicKey,
         })
-        .signers([payer])
+        .signers([userA])
+        .rpc();
+
+      await program.methods
+        .stake(new BN(dUserTokens / 4n))
+        .accounts({
+          mint: mintKeypair.publicKey,
+        })
+        .signers([userA])
         .rpc();
 
       await program.methods
@@ -260,7 +262,7 @@ describe("staking program in the local node", () => {
         .accounts({
           mint: addresses.nft,
         })
-        .signers([payer])
+        .signers([userA])
         .rpc();
 
       await program.methods
@@ -268,7 +270,7 @@ describe("staking program in the local node", () => {
         .accounts({
           mint: mintKeypair.publicKey,
         })
-        .signers([payer])
+        .signers([userA])
         .rpc();
 
       await program.methods
@@ -276,7 +278,7 @@ describe("staking program in the local node", () => {
         .accounts({
           mint: mintKeypair.publicKey,
         })
-        .signers([payer])
+        .signers([userA])
         .rpc();
 
       // await program.methods

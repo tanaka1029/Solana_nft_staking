@@ -8,7 +8,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { Program, IdlAccounts, BN } from "@coral-xyz/anchor";
+import { Program, IdlAccounts, BN, LangErrorCode } from "@coral-xyz/anchor";
 import {
   airdropSol,
   createTokenAccountAndCredit,
@@ -23,6 +23,7 @@ import {
   getSeedAccounts,
   setupAddresses,
   eq,
+  expectErrorWitLog,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -34,9 +35,17 @@ import {
   NFT_APY,
   ONE_DAY_SECONDS,
   ONE_YEAR_SECONDS,
-  payer,
+  userA,
+  userB,
 } from "./const";
 import { StakeEntry } from "./types";
+import {
+  claimRpc,
+  destakeRpc,
+  initializeStakeInfoRpc,
+  lockNftRpc,
+  stakeRpc,
+} from "./rpc";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -60,23 +69,22 @@ describe("staking program in the solana-bankrun simulation", () => {
     context: ProgramTestContext,
     program: Program<ViridisStaking>
   ) => {
-    await airdropSol(context, payer.publicKey, 1);
-    await createToken(context.banksClient, payer, DECIMALS, mintKeypair);
+    await airdropSol(context, userA.publicKey, 1);
+    await airdropSol(context, userB.publicKey, 1);
+    await createToken(context.banksClient, userA, DECIMALS, mintKeypair);
     await program.methods
       .initialize()
       .accounts({
-        signer: payer.publicKey,
+        signer: userA.publicKey,
         mint: mintKeypair.publicKey,
         nftCollection: addresses.nftCollection,
       })
-      .signers([payer])
+      .signers([userA])
       .rpc();
   };
 
-  async function fetchStakes() {
-    const stakeInfo = await program.account.stakeInfo.fetch(
-      addresses.stakeInfo
-    );
+  async function fetchStakes(stakeInfoAddress: PublicKey) {
+    const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
     return stakeInfo.stakes;
   }
 
@@ -92,7 +100,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     return program.methods
       .stake(new BN(amountDecimals))
       .accounts({
-        signer: payer.publicKey,
+        signer: userA.publicKey,
         mint: mintKeypair.publicKey,
       })
       .instruction();
@@ -102,7 +110,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     return await program.methods
       .initializeStakeInfo()
       .accounts({
-        signer: payer.publicKey,
+        signer: userA.publicKey,
         stakeInfo: addresses.stakeInfo,
       })
       .instruction();
@@ -115,32 +123,10 @@ describe("staking program in the solana-bankrun simulation", () => {
     return await program.methods
       .lockNft(new BN(stakeIndex), new BN(lockPeriod))
       .accounts({
-        signer: payer.publicKey,
+        signer: userA.publicKey,
         mint: addresses.nft,
       })
       .instruction();
-  };
-
-  const claimRpc = async (stakeIndex: number) => {
-    await program.methods
-      .claim(new BN(stakeIndex))
-      .accounts({
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey,
-      })
-      .signers([payer])
-      .rpc();
-  };
-
-  const destakeRpc = async (stakeIndex: number) => {
-    await program.methods
-      .destake(new BN(stakeIndex))
-      .accounts({
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey,
-      })
-      .signers([payer])
-      .rpc();
   };
 
   async function getBalance(address: PublicKey) {
@@ -148,6 +134,7 @@ describe("staking program in the solana-bankrun simulation", () => {
   }
 
   const credit = async (
+    address: PublicKey,
     tokenAmount: number | bigint,
     vaultAmount: number | bigint,
     nftAmount: number
@@ -158,7 +145,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       await createTokenAccountAndCredit(
         context,
         mintKeypair.publicKey,
-        payer.publicKey,
+        address,
         dUserTokens
       );
     }
@@ -166,7 +153,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       await createTokenAccountAndCredit(
         context,
         addresses.nft,
-        payer.publicKey,
+        address,
         BigInt(nftAmount)
       );
     }
@@ -193,7 +180,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     addresses = await setupAddresses(
       program.programId,
       context,
-      payer.publicKey,
+      userA.publicKey,
       mintKeypair.publicKey
     );
     await setupEnvironment(context, program);
@@ -210,9 +197,8 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     let userTokens = 1_000_000;
     let vaultTokens = 5_000_000_000;
-    let userNftCount = 1;
 
-    await credit(userTokens, vaultTokens, userNftCount);
+    await credit(userA.publicKey, userTokens, vaultTokens, 1);
 
     const nftLockPeriod = 90;
     const nftAPY = NFT_APY[nftLockPeriod];
@@ -227,19 +213,19 @@ describe("staking program in the solana-bankrun simulation", () => {
     ];
 
     const messageV0 = new TransactionMessage({
-      payerKey: payer.publicKey,
+      payerKey: userA.publicKey,
       recentBlockhash: context.lastBlockhash,
       instructions,
     }).compileToV0Message();
 
     const tx = new VersionedTransaction(messageV0);
-    tx.sign([payer]);
+    tx.sign([userA]);
 
     const clockBeforeStaking = await context.banksClient.getClock();
 
     await context.banksClient.processTransaction(tx);
 
-    const [stake] = await fetchStakes();
+    const [stake] = await fetchStakes(addresses.getStakeInfo(userA.publicKey));
 
     const userBalanceAfterStaking = await getBalance(addresses.userToken);
     const userStakeBalance = await getBalance(addresses.userStake);
@@ -289,7 +275,7 @@ describe("staking program in the solana-bankrun simulation", () => {
       maxNftApyDurationDays
     );
 
-    await claimRpc(0);
+    await claimRpc(0, userA, mintKeypair.publicKey, program);
 
     const userBalanceAfterClaim = await getBalance(addresses.userToken);
 
@@ -298,7 +284,9 @@ describe("staking program in the solana-bankrun simulation", () => {
       "user balance should have annual reward"
     ).true;
 
-    const [stakeAfterClaim] = await fetchStakes();
+    const [stakeAfterClaim] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
 
     const expectedStakeAfterClaim: StakeEntry = {
       ...expectedStakeAfterStaking,
@@ -311,7 +299,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const clockBeforeDestake = await context.banksClient.getClock();
 
-    await destakeRpc(0);
+    await destakeRpc(0, userA, mintKeypair.publicKey, program);
 
     const expectedRewardAfterDestake = calculateClaimableReward(
       stake,
@@ -341,7 +329,9 @@ describe("staking program in the solana-bankrun simulation", () => {
       "Vault after destake does not match"
     ).true;
 
-    const [stakeAfterDestake] = await fetchStakes();
+    const [stakeAfterDestake] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
 
     expect(
       eq(stakeAfterDestake.destakeTime, clockBeforeDestake.unixTimestamp),
@@ -353,13 +343,15 @@ describe("staking program in the solana-bankrun simulation", () => {
     await program.methods
       .unlockNft(new BN(0))
       .accounts({
-        signer: payer.publicKey,
+        signer: userA.publicKey,
         mint: addresses.nft,
       })
-      .signers([payer])
+      .signers([userA])
       .rpc();
 
-    const [stakeAfterNftUnlock] = await fetchStakes();
+    const [stakeAfterNftUnlock] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
     const nftInfo = await fetchNftInfo();
 
     expect(
@@ -377,4 +369,67 @@ describe("staking program in the solana-bankrun simulation", () => {
       "stake paid amount should equal (365 + 1) days reward"
     ).true;
   });
+
+  it("should successfully initialize stake info for a new user", async () => {
+    await initializeStakeInfoRpc(userA, program);
+    const stakes = await fetchStakes(addresses.getStakeInfo(userA.publicKey));
+    expect(stakes).to.be.an("array").that.is.empty;
+  });
+
+  it("should fail on double initialization", async () => {
+    const instructions: TransactionInstruction[] = [
+      await getInitializeStakeInfoInstruction(),
+    ];
+
+    const messageV0 = new TransactionMessage({
+      payerKey: userA.publicKey,
+      recentBlockhash: context.lastBlockhash,
+      instructions,
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(messageV0);
+    tx.sign([userA]);
+
+    await context.banksClient.processTransaction(tx);
+
+    await expectErrorWitLog(
+      initializeStakeInfoRpc(userA, program),
+      "custom program error: 0x0"
+    );
+  });
+
+  it("should initialize for multiple users", async () => {
+    await initializeStakeInfoRpc(userA, program);
+    await initializeStakeInfoRpc(userB, program);
+  });
+
+  it("should fail when locking NFT with invalid lock period", async () => {
+    await credit(userA.publicKey, 1_000_000, 5_000_000_000, 1);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(1_000), userA, mintKeypair.publicKey, program);
+
+    await expectErrorWitLog(
+      lockNftRpc(0, 15, userA, addresses.nft, program),
+      "Invalid stake period"
+    );
+  });
+
+  it("should fail when locking locked NFT second time", async () => {
+    let [stakeAmount1, stakeAmount2] = [d(50_000), d(30_000)];
+
+    await credit(userA.publicKey, 1_000_000, 5_000_000_000, 1);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(stakeAmount1, userA, mintKeypair.publicKey, program);
+    await stakeRpc(stakeAmount2, userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 30, userA, addresses.nft, program);
+
+    await expectErrorWitLog(
+      lockNftRpc(1, 30, userA, addresses.nft, program),
+      "Error: insufficient funds"
+    );
+  });
+
+  it("should fail when", async () => {});
 });
