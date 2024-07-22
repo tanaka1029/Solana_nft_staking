@@ -248,10 +248,16 @@ export function assertDeepEqual<T extends Record<string, any>>(
   });
 }
 
+type Number = bigint | number | BN;
+
+export function eq(n1: Number, n2: Number): boolean {
+  return closeTo(n1, n2, 0);
+}
+
 export function closeTo(
-  actual: BN | bigint | number,
-  expected: BN | bigint | number,
-  tolerance: BN | bigint | number = new BN(1)
+  actual: Number,
+  expected: Number,
+  tolerance: Number = new BN(1)
 ) {
   const difference = new BN(`${expected}`).sub(new BN(`${actual}`)).abs();
 

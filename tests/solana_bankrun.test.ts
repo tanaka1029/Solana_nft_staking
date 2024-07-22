@@ -22,6 +22,7 @@ import {
   calculateClaimableReward,
   getSeedAccounts,
   setupAddresses,
+  eq,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -243,19 +244,20 @@ describe("staking program in the solana-bankrun simulation", () => {
     const userBalanceAfterStaking = await getBalance(addresses.userToken);
     const userStakeBalance = await getBalance(addresses.userStake);
 
-    expect(userBalanceAfterStaking).to.equal(
-      0n,
+    expect(
+      eq(userBalanceAfterStaking, 0),
       "updated user balance after staking should equal 0"
-    );
-    expect(userStakeBalance).to.equal(
-      dUserTokens,
-      "user stake account should equal initial user balance"
-    );
+    ).true;
 
-    expect(BigInt(stake.amount.toString())).to.equal(
-      dUserTokens,
+    expect(
+      eq(userStakeBalance, dUserTokens),
+      "user stake account should equal initial user balance"
+    ).true;
+
+    expect(
+      eq(stake.amount, dUserTokens),
       "stake account should hold initial user balance"
-    );
+    ).true;
 
     const expectedStakeAfterStaking: StakeEntry = {
       amount: new BN(dUserTokens),
@@ -290,10 +292,11 @@ describe("staking program in the solana-bankrun simulation", () => {
     await claimRpc(0);
 
     const userBalanceAfterClaim = await getBalance(addresses.userToken);
-    expect(BigInt(expectedAnnualReward)).to.equal(
-      userBalanceAfterClaim,
+
+    expect(
+      eq(expectedAnnualReward, userBalanceAfterClaim),
       "user balance should have annual reward"
-    );
+    ).true;
 
     const [stakeAfterClaim] = await fetchStakes();
 
@@ -340,10 +343,10 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const [stakeAfterDestake] = await fetchStakes();
 
-    expect(BigInt(stakeAfterDestake.destakeTime)).to.equal(
-      clockBeforeDestake.unixTimestamp,
+    expect(
+      eq(stakeAfterDestake.destakeTime, clockBeforeDestake.unixTimestamp),
       "stake should have destaked status"
-    );
+    ).true;
 
     const clockAfterDestake = await context.banksClient.getClock();
 
@@ -359,15 +362,15 @@ describe("staking program in the solana-bankrun simulation", () => {
     const [stakeAfterNftUnlock] = await fetchStakes();
     const nftInfo = await fetchNftInfo();
 
-    expect(nftInfo.daysLocked).to.equal(
-      366,
+    expect(
+      eq(nftInfo.daysLocked, 366),
       "nft info should have right amount of locked days"
-    );
+    ).true;
 
-    expect(BigInt(stakeAfterNftUnlock.nftUnlockTime)).to.equal(
-      clockAfterDestake.unixTimestamp,
+    expect(
+      eq(stakeAfterNftUnlock.nftUnlockTime, clockAfterDestake.unixTimestamp),
       "stake unlock time should equal current block timestamp"
-    );
+    ).true;
 
     expect(
       closeTo(stakeAfterNftUnlock.paidAmount, expectedRewardAfterDestake),
