@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{ associated_token::AssociatedToken, token::{ Mint, Token, TokenAccount } };
-use crate::utils::{ resize_account, transfer_tokens };
+use anchor_spl::token::{ Mint, Token, TokenAccount };
+use crate::utils::{ calculate_claimable_reward, resize_account, transfer_tokens };
 use crate::{ constants::*, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
@@ -16,6 +16,12 @@ pub struct Restake<'info> {
     )]
     pub config: Account<'info, Config>,
 
+    #[account(mut, seeds = [VAULT_SEED], bump)]
+    pub token_vault: Account<'info, TokenAccount>,
+
+    #[account(mut, associated_token::mint = mint, associated_token::authority = signer)]
+    pub user_token: Account<'info, TokenAccount>,
+
     #[account(
         mut,
         seeds = [STAKE_INFO_SEED, signer.key().as_ref()],
@@ -23,12 +29,14 @@ pub struct Restake<'info> {
     )]
     pub stake_info: Account<'info, StakeInfo>,
 
+    pub mint: Account<'info, Mint>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
-    let Restake { config, stake_info, .. } = ctx.accounts;
+    let Restake { config, stake_info, token_vault, token_program, user_token, .. } = ctx.accounts;
 
     require!((stake_index as usize) < stake_info.stakes.len(), ErrorCode::InvalidStakeIndex);
     let stake_entry = &mut stake_info.stakes[stake_index as usize];
@@ -59,6 +67,21 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
         )
     {
         new_stake.add_nft_info(nft, current_time, nft_lock_days, nft_apy);
+    }
+
+    let claimable_reward = calculate_claimable_reward(stake_entry, current_time)?;
+
+    if claimable_reward > 0 {
+        stake_entry.add_payment(claimable_reward);
+
+        transfer_tokens(
+            token_vault.to_account_info(),
+            user_token.to_account_info(),
+            token_vault.to_account_info(),
+            claimable_reward,
+            token_program.to_account_info(),
+            Some(&[&[VAULT_SEED, &[ctx.bumps.token_vault]]])
+        )?;
     }
 
     resize_account(
