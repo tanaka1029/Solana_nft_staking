@@ -1,6 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ Mint, Token, TokenAccount };
-use crate::utils::{ calculate_claimable_reward, resize_account, transfer_tokens };
+use crate::utils::{
+    calculate_claimable_reward,
+    calculate_days_passed,
+    resize_account,
+    transfer_tokens,
+};
 use crate::{ constants::*, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
@@ -60,12 +65,15 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
     );
 
     if
-        let (Some(nft_lock_days), Some(nft), Some(nft_apy)) = (
+        let (Some(nft_lock_days), Some(nft), Some(nft_apy), Some(nft_lock_time)) = (
             stake_entry.nft_lock_days,
             stake_entry.nft,
             stake_entry.nft_apy,
+            stake_entry.nft_lock_time,
         )
     {
+        let days_elapsed = calculate_days_passed(nft_lock_time, current_time);
+        require!(days_elapsed <= (nft_lock_days as i64) / 2, ErrorCode::RestakeTooLate);
         new_stake.add_nft_info(nft, current_time, nft_lock_days, nft_apy);
     }
 
