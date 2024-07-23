@@ -295,9 +295,7 @@ export async function simulateTimePassage(
 export function calculateClaimableReward(
   stake: StakeEntry,
   daysPassed: number,
-  nftAPY: number,
-  maxNftRewardLamports: number,
-  maxNftApyDays: number
+  nftAPY: number
 ) {
   const annualBaseReward = calculateReward(
     stake.amount,
@@ -305,7 +303,7 @@ export function calculateClaimableReward(
     daysPassed
   );
 
-  const nftEffectiveDays = Math.min(daysPassed, maxNftApyDays);
+  const nftEffectiveDays = Math.min(daysPassed, stake.maxNftApyDurationDays);
   const annualNftReward = calculateReward(
     stake.amount,
     nftAPY,
@@ -314,19 +312,19 @@ export function calculateClaimableReward(
 
   const limitedAnnualNftReward = Math.min(
     annualNftReward,
-    maxNftRewardLamports
+    stake.maxNftRewardLamports
   );
 
   return annualBaseReward + limitedAnnualNftReward;
 }
 
-const calculateReward = (
-  amount: number,
+export const calculateReward = (
+  amount: number | bigint,
   apy: number,
   daysPassed: number
 ): number => {
   try {
-    const bAmount = new Big(amount);
+    const bAmount = new Big(String(amount));
     const bApy = new Big(apy).div(Big(10).pow(APY_DECIMALS));
     const bDaysPassed = new Big(daysPassed);
     const dailyRate = bApy.div(new Big(365));

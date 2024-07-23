@@ -4,7 +4,11 @@ import { getKeypair } from "../utils";
 export const APY_DECIMALS = 2;
 
 export const DECIMALS = 9;
-export const NFT_APY = { 30: 2950, 60: 5950, 90: 10450 };
+export const NFT_APY: Record<30 | 60 | 90, number> = {
+  30: 2950,
+  60: 5950,
+  90: 10450,
+};
 export const ONE_DAY_SECONDS = 24 * 60 * 60;
 export const ONE_YEAR_SECONDS = ONE_DAY_SECONDS * 365;
 
