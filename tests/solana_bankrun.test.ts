@@ -187,7 +187,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     await setupEnvironment(context, program);
   });
 
-  it("Stake 1bil tokens, lock NFT immediately for 90 days, wait for 1 year, claim, wait for 1 day destake", async () => {
+  it("should correctly handle staking 1M tokens, NFT locking for 90 days, claiming after 1 year, destaking after 366 days, and NFT unlocking", async () => {
     const {
       baseApy,
       baseLockDays,
