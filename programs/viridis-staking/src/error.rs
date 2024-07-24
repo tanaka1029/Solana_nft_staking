@@ -42,6 +42,6 @@ pub enum ErrorCode {
     ExceedsMaxLockDuration,
     #[msg("Already restaked")]
     AlreadyRestaked,
-    #[msg("Restake is only allowed before half of the NFT lock period has passed")]
+    #[msg("Restake is only allowed before 1/3 of the NFT lock period has passed")]
     RestakeTooLate,
 }

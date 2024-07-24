@@ -1,3 +1,4 @@
+use anchor_lang::solana_program::clock::SECONDS_PER_DAY;
 use anchor_lang::{ prelude::*, system_program };
 use rust_decimal::prelude::*;
 use crate::state::StakeEntry;
@@ -46,9 +47,7 @@ pub fn calculate_reward(amount: u64, apy: u16, days_passed: u64) -> Option<u64> 
 }
 
 pub fn calculate_days_passed(start_time: i64, current_time: i64) -> i64 {
-    const SECONDS_PER_DAY: i64 = 86400;
-
-    current_time.saturating_sub(start_time).max(0) / SECONDS_PER_DAY
+    current_time.saturating_sub(start_time).max(0) / (SECONDS_PER_DAY as i64)
 }
 
 pub fn get_apy(lock_days: u16) -> Result<u16> {

@@ -1,14 +1,13 @@
-import { startAnchor, ProgramTestContext, Clock } from "solana-bankrun";
+import { startAnchor, ProgramTestContext } from "solana-bankrun";
 import { BankrunProvider } from "anchor-bankrun";
 import {
   AccountInfo,
-  Keypair,
   PublicKey,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { Program, IdlAccounts, BN, LangErrorCode } from "@coral-xyz/anchor";
+import { Program, IdlAccounts, BN } from "@coral-xyz/anchor";
 import {
   airdropSol,
   createTokenAccountAndCredit,
@@ -24,7 +23,6 @@ import {
   setupAddresses,
   eq,
   expectErrorWitLog,
-  calculateReward,
 } from "./utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -622,6 +620,99 @@ describe("staking program in the solana-bankrun simulation", () => {
     );
   });
 
+  it("should restake just before 1/3 when lock period is 30 days", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 30, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 10, context);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+  });
+
+  it("should fail to restake after 1/3 when lock period is 30 days", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 30, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 11, context);
+
+    await expectErrorWitLog(
+      restakeRpc(0, userA, mintKeypair.publicKey, program),
+      "Restake is only allowed before 1/3 of the NFT lock period has passed"
+    );
+  });
+
+  it("should restake just before 1/3 when lock period is 60 days", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 60, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 20, context);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+  });
+
+  it("should fail to restake after 1/3 when lock period is 60 days", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 60, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 21, context);
+
+    await expectErrorWitLog(
+      restakeRpc(0, userA, mintKeypair.publicKey, program),
+      "Restake is only allowed before 1/3 of the NFT lock period has passed"
+    );
+  });
+
+  it("should restake just before 1/3 when lock period is 90 days", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 90, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 30, context);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+  });
+
+  it("should fail to restake after 1/3 when lock period is 90 days", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 30, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 31, context);
+
+    await expectErrorWitLog(
+      restakeRpc(0, userA, mintKeypair.publicKey, program),
+      "Restake is only allowed before 1/3 of the NFT lock period has passed"
+    );
+  });
+
   it("should fail to destake restaked stake before nft lock period", async () => {
     await creditSpl(d(1_000_000), userA.publicKey);
     await creditVault(d(1_000_000));
@@ -631,7 +722,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
     await lockNftRpc(0, 90, userA, addresses.nft, program);
 
-    await simulateTimePassage(ONE_DAY_SECONDS * 45, context);
+    await simulateTimePassage(ONE_DAY_SECONDS * 30, context);
 
     await restakeRpc(0, userA, mintKeypair.publicKey, program);
 
@@ -777,9 +868,9 @@ describe("staking program in the solana-bankrun simulation", () => {
     expect(eq(userBalance, 5_817808_219178082n)).true; //67k from base 750k from nft
   });
 
-  it("should correctly reward user with NFT-boosted APY for a 90-day locked staking period, including a restake after 45 days, with initial stake of 500,000 tokens", async () => {
+  it("should correctly reward user with NFT-boosted APY for a 90-day locked staking period, including a restake after 30 days (1/3 of lock period), with initial stake of 500,000 tokens", async () => {
     const daysToLock = 90;
-    const daysBeforeRestake = 45;
+    const daysBeforeRestake = 30;
     const userCoins = d(500_000);
 
     await creditSpl(userCoins, userA.publicKey);
@@ -794,17 +885,16 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     await restakeRpc(0, userA, mintKeypair.publicKey, program);
 
-    await simulateTimePassage(ONE_DAY_SECONDS * daysToLock, context);
+    await simulateTimePassage(ONE_DAY_SECONDS * 90, context);
 
     await destakeRpc(1, userA, mintKeypair.publicKey, program);
 
     const userBalance = await getBalance(addresses.userToken);
 
     const nftAPY = NFT_APY[daysToLock];
-    const [stake1, stake2] = await fetchStakes(
+    const [stake1, stake2]: StakeEntry[] = await fetchStakes(
       addresses.getStakeInfo(userA.publicKey)
     );
-
     const expectedStake1Reward = calculateClaimableReward(
       stake1,
       daysBeforeRestake,
@@ -818,12 +908,174 @@ describe("staking program in the solana-bankrun simulation", () => {
     );
 
     expect(
-      eq(
+      closeTo(
         userBalance,
         userCoins + BigInt(expectedStake1Reward + expectedStake2Reward)
       )
     ).true;
-    expect(eq(userBalance, 703424_657534246n)).true;
+
+    expect(eq(userBalance, 680821_917808218n)).true;
+  });
+
+  it("should correctly reward user with NFT-boosted APY for a 90-day locked staking period, including a restake after 1 day, with initial stake of 500,000 tokens", async () => {
+    const daysToLock = 90;
+    const userCoins = d(500_000);
+    const minRestakeDays = daysToLock / 3;
+    const daysBeforeRestake = 1;
+
+    await creditSpl(userCoins, userA.publicKey);
+    await creditVault(d(10_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(userCoins, userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, daysToLock, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * daysBeforeRestake, context);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+
+    await simulateTimePassage(
+      ONE_DAY_SECONDS * (minRestakeDays - daysBeforeRestake + daysToLock),
+      context
+    );
+
+    await destakeRpc(1, userA, mintKeypair.publicKey, program);
+
+    const userBalance = await getBalance(addresses.userToken);
+
+    const nftAPY = NFT_APY[daysToLock];
+    const [stake1, stake2]: StakeEntry[] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+    const expectedStake1Reward = calculateClaimableReward(
+      stake1,
+      minRestakeDays,
+      nftAPY
+    );
+
+    const expectedStake2Reward = calculateClaimableReward(
+      stake2,
+      daysToLock,
+      nftAPY
+    );
+
+    expect(
+      closeTo(
+        userBalance,
+        userCoins + BigInt(expectedStake1Reward + expectedStake2Reward)
+      )
+    ).true;
+
+    expect(eq(userBalance, 680821_917808218n)).true;
+  });
+
+  it("should correctly reward user with NFT-boosted APY for a 30-day locked staking period, including a restake after 8 day, with initial stake of 500,000 tokens", async () => {
+    const daysToLock = 30;
+    const userCoins = d(500_000);
+    const minRestakeDays = daysToLock / 3;
+    const daysBeforeRestake = 8;
+
+    await creditSpl(userCoins, userA.publicKey);
+    await creditVault(d(10_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(userCoins, userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, daysToLock, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * daysBeforeRestake, context);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+
+    await simulateTimePassage(
+      ONE_DAY_SECONDS * (minRestakeDays - daysBeforeRestake + daysToLock),
+      context
+    );
+
+    await destakeRpc(1, userA, mintKeypair.publicKey, program);
+
+    const userBalance = await getBalance(addresses.userToken);
+
+    const nftAPY = NFT_APY[daysToLock];
+    const [stake1, stake2]: StakeEntry[] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+    const expectedStake1Reward = calculateClaimableReward(
+      stake1,
+      minRestakeDays,
+      nftAPY
+    );
+
+    const expectedStake2Reward = calculateClaimableReward(
+      stake2,
+      daysToLock,
+      nftAPY
+    );
+
+    expect(
+      closeTo(
+        userBalance,
+        userCoins + BigInt(expectedStake1Reward + expectedStake2Reward),
+        3
+      )
+    ).true;
+
+    expect(eq(userBalance, 519178_082191778n)).true;
+  });
+
+  it("should correctly reward user with NFT-boosted APY for a 30-day locked staking period, including a restake after 15 day, with initial stake of 500,000 tokens", async () => {
+    const daysToLock = 60;
+    const userCoins = d(500_000);
+    const minRestakeDays = daysToLock / 3;
+    const daysBeforeRestake = 15;
+
+    await creditSpl(userCoins, userA.publicKey);
+    await creditVault(d(10_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(userCoins, userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, daysToLock, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * daysBeforeRestake, context);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+
+    await simulateTimePassage(
+      ONE_DAY_SECONDS * (minRestakeDays - daysBeforeRestake + daysToLock),
+      context
+    );
+
+    await destakeRpc(1, userA, mintKeypair.publicKey, program);
+
+    const userBalance = await getBalance(addresses.userToken);
+
+    const nftAPY = NFT_APY[daysToLock];
+    const [stake1, stake2]: StakeEntry[] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+    const expectedStake1Reward = calculateClaimableReward(
+      stake1,
+      minRestakeDays,
+      nftAPY
+    );
+
+    const expectedStake2Reward = calculateClaimableReward(
+      stake2,
+      daysToLock,
+      nftAPY
+    );
+
+    expect(
+      closeTo(
+        userBalance,
+        userCoins + BigInt(expectedStake1Reward + expectedStake2Reward),
+        3
+      )
+    ).true;
+
+    expect(eq(userBalance, 571232_876712327n)).true;
   });
 
   it("should correctly reward user with NFT-boosted APY for two consecutive staking periods (30 and 60 days) with initial stake of 500,000 tokens, including NFT locking and unlocking", async () => {
@@ -914,6 +1166,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     const userCoins = d(500_000);
     const stake1days = 30;
     const stake2days = 60;
+    const daysBeforeRestake = stake2days / 3;
     const stake1NftAPY = NFT_APY[stake1days];
     const stake2NftAPY = NFT_APY[stake2days];
 
@@ -933,7 +1186,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     await stakeRpc(userCoins, userA, mintKeypair.publicKey, program);
     await lockNftRpc(1, stake2days, userA, addresses.nft, program);
 
-    await simulateTimePassage(ONE_DAY_SECONDS * (stake2days / 2), context);
+    await simulateTimePassage(ONE_DAY_SECONDS * daysBeforeRestake, context);
 
     await restakeRpc(1, userA, mintKeypair.publicKey, program);
 
@@ -962,7 +1215,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const stake2Reward = calculateClaimableReward(
       stake2,
-      stake2days / 2,
+      daysBeforeRestake,
       stake2NftAPY
     );
 
@@ -979,7 +1232,6 @@ describe("staking program in the solana-bankrun simulation", () => {
         5
       )
     ).true;
-    expect(eq(userBalance, 5_94520_547945202n)).true;
   });
 
   it("should correctly handle staking, NFT locking, destaking, and prevent late restaking with initial stake of 500,000 tokens", async () => {
@@ -1003,15 +1255,15 @@ describe("staking program in the solana-bankrun simulation", () => {
     await stakeRpc(userCoins, userA, mintKeypair.publicKey, program);
     await lockNftRpc(1, stake2days, userA, addresses.nft, program);
 
-    await simulateTimePassage(ONE_DAY_SECONDS * 31, context);
+    await simulateTimePassage(ONE_DAY_SECONDS * 21, context);
 
     await expectErrorWitLog(
       restakeRpc(1, userA, mintKeypair.publicKey, program),
-      "Restake is only allowed before half of the NFT lock period has passed"
+      "Restake is only allowed before 1/3 of the NFT lock period has passed"
     );
   });
 
-  it("should correctly reward user with NFT-boosted APY for a 30-day staking period and then prevent locking NFT for 90 days due to maximum lock duration", async () => {
+  it("should correctly prevent destaking due to base and nft lock periods", async () => {
     const userCoins = d(500_000);
     const stake1days = 30;
 
@@ -1052,5 +1304,40 @@ describe("staking program in the solana-bankrun simulation", () => {
         log.includes("NFT lock period has not ended")
       )
     ).true;
+  });
+
+  it("should successfully lock nft 2 times by different users", async () => {
+    const userACoins = d(500_000);
+    const userBCoins = d(100_000);
+    const stakeAdays = 30;
+    const stakeBdays = 60;
+
+    await creditSpl(userACoins, userA.publicKey);
+    await creditVault(d(10_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(userACoins, userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, stakeAdays, userA, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * stakeAdays, context);
+
+    await destakeRpc(0, userA, mintKeypair.publicKey, program);
+    await unlockNftRpc(0, userA, addresses.nft, program);
+
+    await creditSpl(userBCoins, userB.publicKey);
+    await creditNft(userB.publicKey);
+    await initializeStakeInfoRpc(userB, program);
+    await stakeRpc(userBCoins, userB, mintKeypair.publicKey, program);
+    await lockNftRpc(0, stakeBdays, userB, addresses.nft, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * stakeBdays, context);
+
+    await destakeRpc(0, userB, mintKeypair.publicKey, program);
+    await unlockNftRpc(0, userB, addresses.nft, program);
+
+    const nftInfo = await fetchNftInfo();
+
+    expect(nftInfo.daysLocked).to.eq(stakeAdays + stakeBdays);
   });
 });

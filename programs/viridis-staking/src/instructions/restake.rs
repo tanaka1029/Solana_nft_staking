@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::clock::SECONDS_PER_DAY;
 use anchor_spl::token::{ Mint, Token, TokenAccount };
 use crate::utils::{
     calculate_claimable_reward,
@@ -55,16 +56,25 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
 
     let current_time = Clock::get()?.unix_timestamp;
 
+    let one_third_lock_period_days = (nft_lock_days as i64) / 3;
     let days_elapsed = calculate_days_passed(nft_lock_time, current_time);
-    require!(days_elapsed <= (nft_lock_days as i64) / 2, ErrorCode::RestakeTooLate);
+    require!(days_elapsed <= one_third_lock_period_days, ErrorCode::RestakeTooLate);
 
-    stake_entry.restake_time = Some(current_time);
-    stake_entry.destake_time = Some(current_time);
-    stake_entry.nft_unlock_time = Some(current_time);
+    let one_third_lock_period_seconds = one_third_lock_period_days * (SECONDS_PER_DAY as i64);
+
+    let min_restake_start_time = nft_lock_time
+        .checked_add(one_third_lock_period_seconds)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let restake_time = min_restake_start_time.max(current_time);
+
+    stake_entry.restake_time = Some(restake_time);
+    stake_entry.destake_time = Some(restake_time);
+    stake_entry.nft_unlock_time = Some(restake_time);
 
     let new_stake = &mut StakeEntry::new(
         stake_entry.amount,
-        current_time,
+        restake_time,
         config.base_lock_days,
         stake_entry.base_apy,
         stake_entry.max_nft_reward_lamports,
@@ -72,9 +82,9 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
         Some(stake_index)
     );
 
-    new_stake.add_nft_info(nft, current_time, nft_lock_days, nft_apy);
+    new_stake.add_nft_info(nft, restake_time, nft_lock_days, nft_apy);
 
-    let claimable_reward = calculate_claimable_reward(stake_entry, current_time)?;
+    let claimable_reward = calculate_claimable_reward(stake_entry, restake_time)?;
 
     if claimable_reward > 0 {
         stake_entry.add_payment(claimable_reward);
