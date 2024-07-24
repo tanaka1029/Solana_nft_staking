@@ -1,12 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::clock::SECONDS_PER_DAY;
 use anchor_spl::token::{ Mint, Token, TokenAccount };
-use crate::utils::{
-    calculate_claimable_reward,
-    calculate_days_passed,
-    resize_account,
-    transfer_tokens,
-};
+use crate::utils::{ calculate_claimable_reward, resize_account, transfer_tokens };
 use crate::{ constants::*, error::ErrorCode, state::* };
 
 #[derive(Accounts)]
@@ -57,8 +52,6 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
     let current_time = Clock::get()?.unix_timestamp;
 
     let one_third_lock_period_days = (nft_lock_days as i64) / 3;
-    let days_elapsed = calculate_days_passed(nft_lock_time, current_time);
-    require!(days_elapsed <= one_third_lock_period_days, ErrorCode::RestakeTooLate);
 
     let one_third_lock_period_seconds = one_third_lock_period_days * (SECONDS_PER_DAY as i64);
 
