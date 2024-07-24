@@ -582,9 +582,11 @@ describe("staking program in the solana-bankrun simulation", () => {
   it("should fail to restake a restaked stake", async () => {
     await creditSpl(d(1_000_000), userA.publicKey);
     await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
 
     await initializeStakeInfoRpc(userA, program);
     await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 90, userA, addresses.nft, program);
 
     await restakeRpc(0, userA, mintKeypair.publicKey, program);
 
@@ -607,22 +609,16 @@ describe("staking program in the solana-bankrun simulation", () => {
     );
   });
 
-  it("should fail to destake restaked stake before base lock period", async () => {
+  it("should fail to restake without locked nft", async () => {
     await creditSpl(d(1_000_000), userA.publicKey);
     await creditVault(d(1_000_000));
 
     await initializeStakeInfoRpc(userA, program);
     await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
 
-    await simulateTimePassage(ONE_DAY_SECONDS * 30, context);
-
-    await restakeRpc(0, userA, mintKeypair.publicKey, program);
-
-    await simulateTimePassage(ONE_DAY_SECONDS * 10, context);
-
     await expectErrorWitLog(
-      destakeRpc(1, userA, mintKeypair.publicKey, program),
-      "Base lock period has not ended"
+      restakeRpc(0, userA, mintKeypair.publicKey, program),
+      "No NFT is locked in this stake"
     );
   });
 
@@ -751,7 +747,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     const expectedReward = calculateClaimableReward(stake, daysToLock, nftAPY);
 
     expect(eq(userBalance, userCoins + BigInt(expectedReward))).true;
-    expect(eq(userBalance, 1271232_876712328n)).true;
+    expect(eq(userBalance, 1_271_232_876712328n)).true;
   });
 
   it("should correctly reward user with NFT-boosted APY after 90-day locked staking period of 5,000,000 tokens and NFT reward limited to 750,000", async () => {
@@ -778,7 +774,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     const expectedReward = calculateClaimableReward(stake, daysToLock, nftAPY);
 
     expect(eq(userBalance, userCoins + BigInt(expectedReward))).true;
-    expect(eq(userBalance, 5817808_219178082n)).true; //67k from base 750k from nft
+    expect(eq(userBalance, 5_817808_219178082n)).true; //67k from base 750k from nft
   });
 
   it("should correctly reward user with NFT-boosted APY for a 90-day locked staking period, including a restake after 45 days, with initial stake of 500,000 tokens", async () => {
@@ -983,7 +979,7 @@ describe("staking program in the solana-bankrun simulation", () => {
         5
       )
     ).true;
-    expect(eq(userBalance, 594520_547945202n)).true;
+    expect(eq(userBalance, 5_94520_547945202n)).true;
   });
 
   it("should correctly handle staking, NFT locking, destaking, and prevent late restaking with initial stake of 500,000 tokens", async () => {

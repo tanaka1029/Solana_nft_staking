@@ -48,7 +48,15 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
     require!(stake_entry.parent_stake_index.is_none(), ErrorCode::AlreadyRestaked);
     require!(stake_entry.destake_time.is_none(), ErrorCode::AlreadyDestaked);
 
+    let nft_lock_days = stake_entry.nft_lock_days.ok_or(ErrorCode::NoNftLocked)?;
+    let nft_lock_time = stake_entry.nft_lock_time.ok_or(ErrorCode::NoNftLocked)?;
+    let nft = stake_entry.nft.ok_or(ErrorCode::NoNftLocked)?;
+    let nft_apy = stake_entry.nft_apy.ok_or(ErrorCode::NoNftLocked)?;
+
     let current_time = Clock::get()?.unix_timestamp;
+
+    let days_elapsed = calculate_days_passed(nft_lock_time, current_time);
+    require!(days_elapsed <= (nft_lock_days as i64) / 2, ErrorCode::RestakeTooLate);
 
     stake_entry.restake_time = Some(current_time);
     stake_entry.destake_time = Some(current_time);
@@ -64,18 +72,7 @@ pub fn restake(ctx: Context<Restake>, stake_index: u64) -> Result<()> {
         Some(stake_index)
     );
 
-    if
-        let (Some(nft_lock_days), Some(nft), Some(nft_apy), Some(nft_lock_time)) = (
-            stake_entry.nft_lock_days,
-            stake_entry.nft,
-            stake_entry.nft_apy,
-            stake_entry.nft_lock_time,
-        )
-    {
-        let days_elapsed = calculate_days_passed(nft_lock_time, current_time);
-        require!(days_elapsed <= (nft_lock_days as i64) / 2, ErrorCode::RestakeTooLate);
-        new_stake.add_nft_info(nft, current_time, nft_lock_days, nft_apy);
-    }
+    new_stake.add_nft_info(nft, current_time, nft_lock_days, nft_apy);
 
     let claimable_reward = calculate_claimable_reward(stake_entry, current_time)?;
 

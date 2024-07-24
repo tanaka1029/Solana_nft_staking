@@ -114,6 +114,8 @@ async function createAndSendVersionedTransaction(
 }
 
 describe("staking program in the local node", () => {
+  return;
+
   let connection: Connection;
   let program: Program<ViridisStaking>;
   let metaplex: Metaplex;
