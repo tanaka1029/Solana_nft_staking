@@ -84,7 +84,7 @@ pub fn lock_nft(ctx: Context<LockNft>, stake_index: u64, lock_days: u16) -> Resu
 
     require!(stake_entry.nft.is_none(), ErrorCode::NftAlreadyLocked);
 
-    let apy = get_apy(lock_days)?;
+    let apy = get_apy(lock_days, config.nft_days_apy)?;
 
     require!(
         nft_info.can_lock(lock_days, stake_entry.max_nft_apy_duration_days),

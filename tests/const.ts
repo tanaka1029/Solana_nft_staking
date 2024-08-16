@@ -4,7 +4,7 @@ import { getKeypair } from "../utils";
 export const APY_DECIMALS = 2;
 
 export const DECIMALS = 9;
-export const NFT_APY: Record<30 | 60 | 90, number> = {
+export const DEFAULT_NFT_APY: Record<30 | 60 | 90, number> = {
   30: 2950,
   60: 5950,
   90: 10450,

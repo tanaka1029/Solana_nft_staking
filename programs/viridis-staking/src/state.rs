@@ -8,17 +8,24 @@ pub struct Config {
     pub max_nft_apy_duration_days: u16,
     pub base_lock_days: u16,
     pub base_apy: u16,
+    pub nft_days_apy: [NftApy; 3],
 }
 
 impl Config {
     pub fn len() -> usize {
-        8 + 32 + 32 + 8 + 2 + 2 + 2
+        8 + 32 + 32 + 8 + 2 + 2 + 2 + 3 * 4
     }
 }
 
 #[account]
 pub struct StakeInfo {
     pub stakes: Vec<StakeEntry>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct NftApy {
+    pub days: u16,
+    pub apy: u16,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]

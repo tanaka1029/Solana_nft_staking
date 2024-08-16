@@ -40,6 +40,7 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     config.max_nft_apy_duration_days = MAX_NFT_APY_DURATION_DAYS;
     config.base_lock_days = STAKE_LOCK_DAYS;
     config.base_apy = BASE_APY;
+    config.nft_days_apy = DEFAULT_NFT_DAYS_APY;
 
     Ok(())
 }

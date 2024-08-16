@@ -1,9 +1,8 @@
 use anchor_lang::solana_program::clock::SECONDS_PER_DAY;
 use anchor_lang::{ prelude::*, system_program };
 use rust_decimal::prelude::*;
-use crate::state::StakeEntry;
+use crate::state::{ NftApy, StakeEntry };
 use crate::{ constants::APY_DECIMALS, error::ErrorCode };
-use crate::constants::DEFAULT_NFT_DAYS_APY;
 use anchor_spl::token::{ transfer, Transfer };
 
 pub fn calculate_claimable_reward(stake_entry: &StakeEntry, current_time: i64) -> Result<u64> {
@@ -50,12 +49,13 @@ pub fn calculate_days_passed(start_time: i64, current_time: i64) -> i64 {
     current_time.saturating_sub(start_time).max(0) / (SECONDS_PER_DAY as i64)
 }
 
-pub fn get_apy(lock_days: u16) -> Result<u16> {
-    for (days, apy) in DEFAULT_NFT_DAYS_APY {
-        if days == lock_days {
-            return Ok(apy);
+pub fn get_apy(lock_days: u16, nft_days_apy: [NftApy; 3]) -> Result<u16> {
+    for nft_apy in nft_days_apy.iter() {
+        if lock_days == nft_apy.days {
+            return Ok(nft_apy.apy);
         }
     }
+
     Err(ErrorCode::InvalidStakePeriod.into())
 }
 

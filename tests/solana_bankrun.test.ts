@@ -31,7 +31,7 @@ import IDL from "../target/idl/viridis_staking.json";
 import {
   DECIMALS,
   mintKeypair,
-  NFT_APY,
+  DEFAULT_NFT_APY,
   ONE_DAY_SECONDS,
   ONE_YEAR_SECONDS,
   userA,
@@ -201,7 +201,7 @@ describe("staking program in the solana-bankrun simulation", () => {
     await creditVault(vaultTokens);
 
     const nftLockPeriod = 90;
-    const nftAPY = NFT_APY[nftLockPeriod];
+    const nftAPY = DEFAULT_NFT_APY[nftLockPeriod];
 
     const instructions: TransactionInstruction[] = [
       await getInitializeStakeInfoInstruction(),
@@ -800,7 +800,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake] = await fetchStakes(addresses.getStakeInfo(userA.publicKey));
 
     const expectedReward = calculateClaimableReward(stake, daysToLock, nftAPY);
@@ -827,7 +827,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake] = await fetchStakes(addresses.getStakeInfo(userA.publicKey));
 
     const expectedReward = calculateClaimableReward(stake, daysToLock, nftAPY);
@@ -859,7 +859,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake1, stake2]: StakeEntry[] = await fetchStakes(
       addresses.getStakeInfo(userA.publicKey)
     );
@@ -912,7 +912,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake1, stake2]: StakeEntry[] = await fetchStakes(
       addresses.getStakeInfo(userA.publicKey)
     );
@@ -965,7 +965,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake1, stake2]: StakeEntry[] = await fetchStakes(
       addresses.getStakeInfo(userA.publicKey)
     );
@@ -1019,7 +1019,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake1, stake2]: StakeEntry[] = await fetchStakes(
       addresses.getStakeInfo(userA.publicKey)
     );
@@ -1050,8 +1050,8 @@ describe("staking program in the solana-bankrun simulation", () => {
     const userCoins = d(500_000);
     const stake1days = 30;
     const stake2days = 60;
-    const stake1NftAPY = NFT_APY[stake1days];
-    const stake2NftAPY = NFT_APY[stake2days];
+    const stake1NftAPY = DEFAULT_NFT_APY[stake1days];
+    const stake2NftAPY = DEFAULT_NFT_APY[stake2days];
 
     await creditSpl(userCoins, userA.publicKey);
     await creditVault(d(10_000_000));
@@ -1135,8 +1135,8 @@ describe("staking program in the solana-bankrun simulation", () => {
     const stake1days = 30;
     const stake2days = 60;
     const daysBeforeRestake = stake2days / 3;
-    const stake1NftAPY = NFT_APY[stake1days];
-    const stake2NftAPY = NFT_APY[stake2days];
+    const stake1NftAPY = DEFAULT_NFT_APY[stake1days];
+    const stake2NftAPY = DEFAULT_NFT_APY[stake2days];
 
     await creditSpl(userCoins, userA.publicKey);
     await creditVault(d(10_000_000));
@@ -1303,7 +1303,7 @@ describe("staking program in the solana-bankrun simulation", () => {
 
     const userBalance = await getBalance(addresses.userToken);
 
-    const nftAPY = NFT_APY[daysToLock];
+    const nftAPY = DEFAULT_NFT_APY[daysToLock];
     const [stake1, stake2]: StakeEntry[] = await fetchStakes(
       addresses.getStakeInfo(userA.publicKey)
     );

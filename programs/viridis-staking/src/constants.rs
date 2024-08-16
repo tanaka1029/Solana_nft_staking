@@ -1,3 +1,5 @@
+use crate::state::NftApy;
+
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const STAKE_INFO_SEED: &[u8] = b"stake_info";
@@ -7,10 +9,10 @@ pub const NFT_INFO_SEED: &[u8] = b"nft_info";
 
 pub const METADATA_SEED: &[u8] = b"metadata";
 
-pub const DEFAULT_NFT_DAYS_APY: [(u16, u16); 3] = [
-    (30, 2950),
-    (60, 5950),
-    (90, 10450),
+pub const DEFAULT_NFT_DAYS_APY: [NftApy; 3] = [
+    NftApy { days: 30, apy: 2950 },
+    NftApy { days: 60, apy: 5950 },
+    NftApy { days: 90, apy: 10450 },
 ];
 
 pub const STAKE_LOCK_DAYS: u16 = 14;

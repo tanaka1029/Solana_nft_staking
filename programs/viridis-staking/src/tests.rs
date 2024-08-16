@@ -1,7 +1,72 @@
 #[cfg(test)]
 mod tests {
-    use crate::utils::*;
+    use crate::{ state::NftApy, utils::* };
     use chrono::NaiveDateTime;
+
+    #[test]
+    fn test_get_apy() {
+        let nft_days_apy = [
+            NftApy { days: 30, apy: 2950 },
+            NftApy { days: 60, apy: 5950 },
+            NftApy { days: 90, apy: 10450 },
+        ];
+
+        // Test exact matches
+        assert_eq!(get_apy(30, nft_days_apy).unwrap(), 2950);
+        assert_eq!(get_apy(60, nft_days_apy).unwrap(), 5950);
+        assert_eq!(get_apy(90, nft_days_apy).unwrap(), 10450);
+
+        // Test non-matching values
+        assert!(get_apy(29, nft_days_apy).is_err());
+        assert!(get_apy(31, nft_days_apy).is_err());
+        assert!(get_apy(59, nft_days_apy).is_err());
+        assert!(get_apy(61, nft_days_apy).is_err());
+        assert!(get_apy(89, nft_days_apy).is_err());
+        assert!(get_apy(91, nft_days_apy).is_err());
+
+        // Test edge cases
+        assert!(get_apy(0, nft_days_apy).is_err());
+        assert!(get_apy(u16::MAX, nft_days_apy).is_err());
+    }
+
+    #[test]
+    fn test_get_apy_different_configurations() {
+        let custom_nft_days_apy = [
+            NftApy { days: 7, apy: 1000 },
+            NftApy { days: 14, apy: 2000 },
+            NftApy { days: 21, apy: 3000 },
+        ];
+
+        assert_eq!(get_apy(7, custom_nft_days_apy).unwrap(), 1000);
+        assert_eq!(get_apy(14, custom_nft_days_apy).unwrap(), 2000);
+        assert_eq!(get_apy(21, custom_nft_days_apy).unwrap(), 3000);
+        assert!(get_apy(28, custom_nft_days_apy).is_err());
+    }
+
+    #[test]
+    fn test_get_apy_unsorted_array() {
+        let unsorted_nft_days_apy = [
+            NftApy { days: 90, apy: 10450 },
+            NftApy { days: 30, apy: 2950 },
+            NftApy { days: 60, apy: 5950 },
+        ];
+
+        assert_eq!(get_apy(30, unsorted_nft_days_apy).unwrap(), 2950);
+        assert_eq!(get_apy(60, unsorted_nft_days_apy).unwrap(), 5950);
+        assert_eq!(get_apy(90, unsorted_nft_days_apy).unwrap(), 10450);
+    }
+
+    #[test]
+    fn test_get_apy_duplicate_days() {
+        let duplicate_days_apy = [
+            NftApy { days: 30, apy: 2950 },
+            NftApy { days: 30, apy: 3000 },
+            NftApy { days: 60, apy: 5950 },
+        ];
+
+        assert_eq!(get_apy(30, duplicate_days_apy).unwrap(), 2950);
+        assert_eq!(get_apy(60, duplicate_days_apy).unwrap(), 5950);
+    }
 
     #[test]
     fn test_calculate_reward() {
