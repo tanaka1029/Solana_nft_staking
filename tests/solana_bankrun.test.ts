@@ -683,6 +683,25 @@ describe("staking program in the solana-bankrun simulation", () => {
     );
   });
 
+  it("should fail to destake restaked stake before nft lock period", async () => {
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(1_000_000));
+    await creditNft(userA.publicKey);
+
+    await initializeStakeInfoRpc(userA, program);
+    await stakeRpc(d(10_000), userA, mintKeypair.publicKey, program);
+    await lockNftRpc(0, 90, userA, addresses.nft, program);
+
+    await restakeRpc(0, userA, mintKeypair.publicKey, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 119, context);
+
+    await expectErrorWitLog(
+      destakeRpc(1, userA, mintKeypair.publicKey, program),
+      "NFT lock period has not ended"
+    );
+  });
+
   it("should track days NFT has been locked for and successfully reuse previously locked NFT", async () => {
     await creditSpl(d(1_000_000), userA.publicKey);
     await creditVault(d(1_000_000));

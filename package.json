@@ -4,7 +4,8 @@
     "test": "tsx run-tests.ts",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "generate-types": "anchor build && anchor run copy-types"
+    "generate-types": "anchor build && anchor run copy-types",
+    "initialize": "tsx script/initialize.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",

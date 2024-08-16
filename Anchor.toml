@@ -9,8 +9,8 @@ viridis_staking = "4Y3DWRxpDUHfkKfEqX2joWtcTbR2kyd4wNv94jY3eHLv"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
-wallet = "./.private/id.json"
+cluster = "localnet"
+wallet = "./.private/auth_4akxcPBY95B2Vw1jEkXyLQS9v5qfv3Xu5682YsZHo3oz.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
