@@ -3,13 +3,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-viridis_staking = "4Y3DWRxpDUHfkKfEqX2joWtcTbR2kyd4wNv94jY3eHLv"
+viridis_staking = "6TXTWSeYPwyqzd27jziKjedeLh7bGRx5Gjtpqjz7ZLbA"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "./.private/auth_4akxcPBY95B2Vw1jEkXyLQS9v5qfv3Xu5682YsZHo3oz.json"
 
 [scripts]
