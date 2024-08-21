@@ -185,6 +185,185 @@ describe("staking program in the solana-bankrun simulation", () => {
     await setupEnvironment(context, program);
   });
 
+  it("should successfully update config parameters", async () => {
+    const updateArgs = {
+      admin: userB.publicKey,
+      baseLockDays: 0,
+      maxNftApyDurationDays: 92,
+      baseApy: 500,
+      maxNftRewardLamports: new BN(1_000_000),
+      nftDaysApy: [
+        { days: 30, apy: 1000 },
+        { days: 60, apy: 2000 },
+        { days: 90, apy: 3000 },
+      ],
+    };
+
+    // Update config
+    await program.methods
+      .updateConfig(updateArgs)
+      .accounts({
+        config: addresses.config,
+        admin: userA.publicKey,
+      })
+      .signers([userA])
+      .rpc();
+
+    // Fetch updated config
+    const updatedConfig = await fetchConfig();
+
+    assertDeepEqual<Omit<typeof updatedConfig, "nftCollection">>(
+      updatedConfig,
+      updateArgs
+    );
+  });
+
+  it("should create stakes with different configurations before and after config update", async () => {
+    // Initial setup
+    await initializeStakeInfoRpc(userA, program);
+    await creditSpl(d(1_000_000), userA.publicKey);
+    await creditVault(d(10_000_000));
+    await creditNft(userA.publicKey);
+
+    // Fetch initial config
+    const initialConfig = await fetchConfig();
+
+    // Create a stake with the initial configuration
+    const initialStakeAmount = d(100_000);
+    await stakeRpc(initialStakeAmount, userA, mintKeypair.publicKey, program);
+    await lockNftRpc(
+      0,
+      initialConfig.nftDaysApy[0].days,
+      userA,
+      addresses.nft,
+      program
+    );
+
+    // Fetch the initial stake
+    const [initialStake] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+
+    // Assert initial stake parameters
+    expect(initialStake.stakeLockDays).to.equal(initialConfig.baseLockDays);
+    expect(initialStake.baseApy).to.equal(initialConfig.baseApy);
+    expect(initialStake.nftLockDays).to.equal(initialConfig.nftDaysApy[0].days);
+    expect(initialStake.nftApy).to.equal(initialConfig.nftDaysApy[0].apy);
+    expect(
+      initialStake.maxNftRewardLamports.eq(
+        new BN(initialConfig.maxNftRewardLamports)
+      )
+    ).to.be.true;
+    expect(initialStake.maxNftApyDurationDays).to.equal(
+      initialConfig.maxNftApyDurationDays
+    );
+
+    // Prepare update arguments
+    const updateArgs = {
+      admin: null,
+      baseLockDays: 0, // New base lock days
+      maxNftApyDurationDays: 100, // New max NFT APY duration
+      baseApy: 350, // New base APY (5%)
+      maxNftRewardLamports: new BN(1_000_000), // New max NFT reward
+      nftDaysApy: [
+        { days: 10, apy: 1000 }, // 10%
+        { days: 13, apy: 2000 }, // 20%
+        { days: 95, apy: 3000 }, // 30%
+      ],
+    };
+
+    // Update config
+    await program.methods
+      .updateConfig(updateArgs)
+      .accounts({
+        config: addresses.config,
+        admin: userA.publicKey,
+      })
+      .signers([userA])
+      .rpc();
+
+    // Fetch updated config
+    const updatedConfig = await fetchConfig();
+
+    // Create a new stake with the updated configuration
+    const newStakeAmount = d(200_000);
+    await stakeRpc(newStakeAmount, userA, mintKeypair.publicKey, program);
+
+    await creditNft(userA.publicKey);
+
+    await lockNftRpc(
+      1,
+      updatedConfig.nftDaysApy[0].days,
+      userA,
+      addresses.nft,
+      program
+    );
+
+    // Fetch all stakes
+    const [_, newStake] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+
+    // Assert new stake parameters
+    expect(newStake.stakeLockDays).to.equal(updatedConfig.baseLockDays);
+    expect(newStake.baseApy).to.equal(updatedConfig.baseApy);
+    expect(newStake.nftLockDays).to.equal(updatedConfig.nftDaysApy[0].days);
+    expect(newStake.nftApy).to.equal(updatedConfig.nftDaysApy[0].apy);
+    expect(
+      newStake.maxNftRewardLamports.eq(
+        new BN(updatedConfig.maxNftRewardLamports)
+      )
+    ).to.be.true;
+    expect(newStake.maxNftApyDurationDays).to.equal(
+      updatedConfig.maxNftApyDurationDays
+    );
+
+    // Verify that the initial stake remains unchanged
+    const [unchangedInitialStake] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+    expect(unchangedInitialStake).to.deep.equal(initialStake);
+
+    // Create a stake with new NFT lock period (should succeed)
+    await stakeRpc(d(50_000), userA, mintKeypair.publicKey, program);
+
+    await creditNft(userA.publicKey);
+
+    // Try to create a stake with old NFT lock period (should fail)
+    await expect(
+      lockNftRpc(
+        2,
+        initialConfig.nftDaysApy[0].days,
+        userA,
+        addresses.nft,
+        program
+      )
+    ).to.be.rejectedWith(/Invalid stake period/);
+
+    await lockNftRpc(
+      2,
+      updatedConfig.nftDaysApy[1].days,
+      userA,
+      addresses.nft,
+      program
+    );
+
+    // Fetch all stakes again
+    const [, , newestStake] = await fetchStakes(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+
+    // Assert newest stake parameters
+    expect(newestStake.nftLockDays).to.equal(updatedConfig.nftDaysApy[1].days);
+    expect(newestStake.nftApy).to.equal(updatedConfig.nftDaysApy[1].apy);
+
+    await stakeRpc(d(50_000), userA, mintKeypair.publicKey, program);
+    await destakeRpc(3, userA, mintKeypair.publicKey, program);
+
+    await simulateTimePassage(ONE_DAY_SECONDS * 10, context);
+    await destakeRpc(1, userA, mintKeypair.publicKey, program);
+  });
+
   it("should correctly handle staking 1M tokens, NFT locking for 90 days, claiming after 1 year, destaking after 366 days, and NFT unlocking", async () => {
     const {
       baseApy,

@@ -9,6 +9,7 @@ pub struct UpdateConfigArgs {
     pub max_nft_apy_duration_days: Option<u16>,
     pub base_apy: Option<u16>,
     pub max_nft_reward_lamports: Option<u64>,
+    pub nft_days_apy: Option<[NftApy; 3]>,
 }
 
 #[derive(Accounts)]
@@ -50,6 +51,10 @@ pub fn update_config(ctx: Context<UpdateConfig>, args: UpdateConfigArgs) -> Resu
 
     if let Some(max_nft_apy_duration_days) = args.max_nft_apy_duration_days {
         config.max_nft_apy_duration_days = max_nft_apy_duration_days;
+    }
+
+    if let Some(nft_days_apy) = args.nft_days_apy {
+        config.nft_days_apy = nft_days_apy;
     }
 
     Ok(())
