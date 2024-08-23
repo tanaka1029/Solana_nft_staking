@@ -14,6 +14,7 @@ import {
 import { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
 import { ViridisStaking } from "../target/types/viridis_staking";
 import IDL from "../target/idl/viridis_staking.json";
+import { getUpdateConfigIx } from "./instruction/update-config";
 
 export const getConnection = () => {
   return new Connection(CLUSTER_URL, "confirmed");
@@ -32,17 +33,15 @@ export const getProgram = (connection: Connection, wallet: Wallet) => {
   );
 };
 
-async function initialize() {
+async function updateConfig() {
   const connection = await getConnection();
   const singer = getKeypair(SIGNER_KEY_PATH);
   const wallet = new Wallet(singer);
   const program = getProgram(connection, wallet);
 
-  const ix = await getInitializeIx({
+  const ix = await getUpdateConfigIx({
     accounts: {
-      signer: singer.publicKey,
-      mint: SPL_MINT,
-      nftCollection: COLLECTION_MINT,
+      admin: singer.publicKey,
     },
     program,
   });
@@ -54,4 +53,4 @@ async function initialize() {
   await sendAndConfirmTransaction(connection, tx, [singer]);
 }
 
-initialize();
+updateConfig();

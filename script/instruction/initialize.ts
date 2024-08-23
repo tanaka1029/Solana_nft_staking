@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { Program } from "@coral-xyz/anchor";
-import { ViridisStaking } from "../../../target/types/viridis_staking";
+import { ViridisStaking } from "../../target/types/viridis_staking";
 
 type InitializeProgramConfigAgrs = {
   accounts: {
@@ -11,7 +11,7 @@ type InitializeProgramConfigAgrs = {
   program: Program<ViridisStaking>;
 };
 
-export function initializeInstruction({
+export function getInitializeIx({
   accounts,
   program,
 }: InitializeProgramConfigAgrs) {

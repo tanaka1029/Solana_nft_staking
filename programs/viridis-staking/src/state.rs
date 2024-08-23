@@ -19,6 +19,7 @@ impl Config {
 
 #[account]
 pub struct StakeInfo {
+    pub address: Pubkey,
     pub stakes: Vec<StakeEntry>,
 }
 

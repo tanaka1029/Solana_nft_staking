@@ -10,7 +10,7 @@ pub struct InitializeStakeInfo<'info> {
     #[account(
         init,
         payer = signer,
-        space = 8 + 4,
+        space = 8 + 32 + 4,
         seeds = [STAKE_INFO_SEED, signer.key.as_ref()],
         bump
     )]
@@ -19,6 +19,8 @@ pub struct InitializeStakeInfo<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_stake_info(_ctx: Context<InitializeStakeInfo>) -> Result<()> {
+pub fn initialize_stake_info(ctx: Context<InitializeStakeInfo>) -> Result<()> {
+    let stake_info = &mut ctx.accounts.stake_info;
+    stake_info.address = ctx.accounts.signer.key();
     Ok(())
 }

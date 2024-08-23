@@ -85,8 +85,12 @@ describe("staking program in the solana-bankrun simulation", () => {
       .rpc();
   };
 
+  async function fetchStakeInfo(stakeInfoAddress: PublicKey) {
+    return program.account.stakeInfo.fetch(stakeInfoAddress);
+  }
+
   async function fetchStakes(stakeInfoAddress: PublicKey) {
-    const stakeInfo = await program.account.stakeInfo.fetch(stakeInfoAddress);
+    const stakeInfo = await fetchStakeInfo(stakeInfoAddress);
     return stakeInfo.stakes;
   }
 
@@ -218,6 +222,17 @@ describe("staking program in the solana-bankrun simulation", () => {
     );
   });
 
+  it("should initialize stake info that holds owner information", async () => {
+    await initializeStakeInfoRpc(userA, program);
+
+    // Fetch the initial stake
+    const stakeInfo = await fetchStakeInfo(
+      addresses.getStakeInfo(userA.publicKey)
+    );
+
+    expect(stakeInfo.address.toBase58()).to.equal(userA.publicKey.toBase58());
+  });
+
   it("should create stakes with different configurations before and after config update", async () => {
     // Initial setup
     await initializeStakeInfoRpc(userA, program);
@@ -276,7 +291,6 @@ describe("staking program in the solana-bankrun simulation", () => {
     await program.methods
       .updateConfig(updateArgs)
       .accounts({
-        config: addresses.config,
         admin: userA.publicKey,
       })
       .signers([userA])

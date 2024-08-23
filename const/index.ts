@@ -32,5 +32,5 @@ export const SPL_MINT = new PublicKey(
   "H2nzjtvs3ZgZfxwYpxiDaTjAHw7eUCH2URsbJP3efw5G"
 );
 export const COLLECTION_MINT = new PublicKey(
-  "4b8qDvtrEfW8znYXbbJm2rguzMqKkiMopLthmKaKBbuM"
+  "BRdbA1LZwnpFkiQgBWSSeGABw2LhpZRZXHy1vjkbgVsw"
 );

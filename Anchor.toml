@@ -9,7 +9,7 @@ viridis_staking = "6TXTWSeYPwyqzd27jziKjedeLh7bGRx5Gjtpqjz7ZLbA"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "./.private/auth_4akxcPBY95B2Vw1jEkXyLQS9v5qfv3Xu5682YsZHo3oz.json"
 
 [scripts]
