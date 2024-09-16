@@ -15,9 +15,9 @@ export function getUpdateConfigIx({
 }: InitializeProgramConfigAgrs) {
   const updateArgs = {
     admin: null,
-    baseLockDays: null,
+    baseLockDays: 0,
     maxNftApyDurationDays: null,
-    baseApy: null,
+    baseApy: 350,
     maxNftRewardLamports: null,
     nftDaysApy: [
       { days: 45, apy: 1650 },
